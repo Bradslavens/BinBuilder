@@ -1,0 +1,16 @@
+{
+  "name": "binbuilder",
+  "version": "1.0.0",
+  "description": "Mobile-first PWA for inventorying items in storage bins",
+  "private": true,
+  "scripts": {
+    "serve": "npx serve -l 3000",
+    "start": "npm run serve"
+  },
+  "dependencies": {
+    "idb": "^8.0.3",
+    "jsqr": "^1.4.0",
+    "jszip": "^3.10.1",
+    "tesseract.js": "^7.0.0"
+  }
+}
