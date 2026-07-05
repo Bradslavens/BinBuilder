@@ -5,12 +5,19 @@
   "private": true,
   "scripts": {
     "serve": "npx serve -l 3000",
-    "start": "npm run serve"
+    "start": "npm run serve",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "idb": "^8.0.3",
     "jsqr": "^1.4.0",
     "jszip": "^3.10.1",
     "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.9"
   }
 }

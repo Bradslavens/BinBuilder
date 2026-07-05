@@ -5,7 +5,7 @@ let workerPromise = null;
 export async function initOcr(onProgress) {
   if (!workerPromise) {
     workerPromise = Tesseract.createWorker('eng', 1, {
-      workerPath: '/node_modules/tesseract.js/dist/worker.min.js',
+      workerPath: new URL('../vendor/tesseract/worker.min.js', import.meta.url).href,
       logger: (m) => {
         if (onProgress && m.status === 'loading language traineddata') {
           onProgress('Downloading text recognition data…');
