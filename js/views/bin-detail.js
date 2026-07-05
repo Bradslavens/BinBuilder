@@ -1,5 +1,5 @@
 import {
-  getBin, getItemsForBin, putItem, deleteItem, deleteBin, addTextItemToBin,
+  getBin, getItemsForBin, putItem, deleteItem, deleteBin, addTextItemToBin, updateBin,
 } from '../db.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml } from '../utils.js';
 import { showToast } from '../app.js';
@@ -27,6 +27,19 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
         <h2 style="margin:0 0 4px">${escapeHtml(bin.displayName)}</h2>
         ${bin.description ? `<p class="muted" style="margin:0">${escapeHtml(bin.description)}</p>` : ''}
         ${bin.entryMethod === 'qr' ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">${escapeHtml(bin.id)}</p>` : ''}
+      </div>
+      <button type="button" class="btn btn-secondary" id="btn-edit-bin">Edit bin</button>
+      <div id="edit-bin-form" class="hidden stack">
+        <div class="label-field">
+          <label for="edit-bin-name">Name</label>
+          <input type="text" class="text-input" id="edit-bin-name" value="${escapeHtml(bin.displayName)}">
+        </div>
+        <div class="label-field">
+          <label for="edit-bin-desc">Description</label>
+          <textarea class="text-area" id="edit-bin-desc">${escapeHtml(bin.description || '')}</textarea>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-save-bin">Save changes</button>
+        <button type="button" class="btn btn-secondary" id="btn-cancel-edit">Cancel</button>
       </div>
       <button type="button" class="btn btn-primary" id="btn-log-more">Add more items</button>
       <button type="button" class="btn btn-secondary" id="btn-quick-add">Quick add (text only)</button>
@@ -61,6 +74,31 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
   }
 
   container.querySelector('#btn-log-more').addEventListener('click', onLogMore);
+
+  const editForm = container.querySelector('#edit-bin-form');
+  container.querySelector('#btn-edit-bin').addEventListener('click', () => {
+    editForm.classList.toggle('hidden');
+    if (!editForm.classList.contains('hidden')) {
+      container.querySelector('#edit-bin-name').focus();
+    }
+  });
+
+  container.querySelector('#btn-cancel-edit').addEventListener('click', () => {
+    editForm.classList.add('hidden');
+  });
+
+  container.querySelector('#btn-save-bin').addEventListener('click', async () => {
+    const name = container.querySelector('#edit-bin-name').value.trim();
+    if (!name) {
+      showToast('Name cannot be empty');
+      return;
+    }
+    bin.displayName = name;
+    bin.description = container.querySelector('#edit-bin-desc').value.trim();
+    await updateBin(bin);
+    showToast('Bin updated');
+    renderBinDetail(container, binId, { onBack, onLogMore });
+  });
 
   const quickForm = container.querySelector('#quick-add-form');
   container.querySelector('#btn-quick-add').addEventListener('click', () => {

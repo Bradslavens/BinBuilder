@@ -11,6 +11,7 @@ import {
   deleteBin,
   clearAllData,
   importData,
+  updateBin,
 } from '../js/db.js';
 
 beforeEach(async () => {
@@ -37,6 +38,17 @@ describe('bins', () => {
     const bin = await createBinFromPhoto({ description: '  Garage shelf  ' });
     expect(bin.displayName).toBe('Garage shelf');
     expect(bin.description).toBe('Garage shelf');
+  });
+
+  it('renames a bin and edits its description via updateBin', async () => {
+    const bin = await createBinFromQr('BIN-EDIT');
+    bin.displayName = 'Attic box 4';
+    bin.description = 'Winter clothes';
+    await updateBin(bin);
+
+    const reloaded = await getBin('BIN-EDIT');
+    expect(reloaded.displayName).toBe('Attic box 4');
+    expect(reloaded.description).toBe('Winter clothes');
   });
 });
 

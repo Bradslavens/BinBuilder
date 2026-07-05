@@ -42,8 +42,8 @@ function showEntryChoice() {
     <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px;gap:16px;background:var(--bg)">
       <h2 style="margin:0;text-align:center">Log a bin</h2>
       <p class="muted" style="text-align:center;margin:0">How do you want to identify this bin?</p>
-      <button type="button" class="btn btn-primary" id="btn-scan-qr">Scan QR label</button>
-      <button type="button" class="btn btn-secondary" id="btn-photo-bin">Photo of bin</button>
+      <button type="button" class="btn btn-primary" id="btn-photo-bin">📷 Photo of bin</button>
+      <button type="button" class="btn btn-secondary" id="btn-scan-qr">Scan QR label</button>
       <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
     </div>
   `;
@@ -51,16 +51,14 @@ function showEntryChoice() {
   document.body.appendChild(overlay);
   addCleanup(() => overlay.remove());
 
-  overlay.querySelector('#btn-scan-qr').addEventListener('click', () => {
-    overlay.remove();
-    cleanupFns = cleanupFns.filter((fn) => fn !== (() => overlay.remove()));
-    startQrScan();
-  });
-
   overlay.querySelector('#btn-photo-bin').addEventListener('click', () => {
     overlay.remove();
-    cleanupFns = cleanupFns.filter((fn) => fn !== (() => overlay.remove()));
     startPhotoCapture();
+  });
+
+  overlay.querySelector('#btn-scan-qr').addEventListener('click', () => {
+    overlay.remove();
+    startQrScan();
   });
 
   overlay.querySelector('#btn-cancel').addEventListener('click', () => {
@@ -98,7 +96,8 @@ async function startQrScan() {
     stopScan();
     overlay.remove();
     cleanupFns = cleanupFns.filter((f) => f !== stopScan);
-    startRecordingForBin(bin.id, video);
+    stopCamera();
+    showStartRecording(bin.id, null);
   });
 
   addCleanup(stopScan);
@@ -106,8 +105,8 @@ async function startQrScan() {
 
 async function startPhotoCapture() {
   const overlay = buildCameraOverlay({
-    hint: 'Photograph the bin label or markings',
-    captureLabel: 'Take photo',
+    hint: 'Center the bin label in view, then tap Take Photo',
+    captureLabel: '📷 Take Photo',
     cancelLabel: 'Cancel',
   });
 
@@ -124,19 +123,29 @@ async function startPhotoCapture() {
 
   overlay.captureBtn.addEventListener('click', async () => {
     overlay.captureBtn.disabled = true;
+    overlay.captureBtn.textContent = 'Capturing…';
+
+    // The video may not have reported dimensions yet on slower devices.
+    for (let i = 0; i < 10 && !video.videoWidth; i++) {
+      await wait(100);
+    }
+
     try {
       const photoBlob = await capturePhotoFromVideo(video);
       stopCamera();
       overlay.remove();
-      await showPhotoReview(photoBlob);
+      await showPhotoConfirm(photoBlob);
     } catch (e) {
-      showToast(e.message || 'Capture failed');
+      showToast(e.message || 'Capture failed — try again');
       overlay.captureBtn.disabled = false;
+      overlay.captureBtn.textContent = '📷 Take Photo';
     }
   });
 }
 
-async function showPhotoReview(photoBlob) {
+// Step 2: confirm the single still photo. OCR runs in the background and
+// pre-fills the description without ever blocking the confirm button.
+async function showPhotoConfirm(photoBlob) {
   const resized = await resizeImageBlob(photoBlob, 1280);
   const previewUrl = blobToObjectUrl(resized);
 
@@ -145,15 +154,15 @@ async function showPhotoReview(photoBlob) {
   overlay.style.background = 'var(--bg)';
   overlay.innerHTML = `
     <div style="flex:1;overflow:auto;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))">
-      <h2 style="margin:0 0 12px">Bin photo</h2>
+      <h2 style="margin:0 0 12px">Confirm bin photo</h2>
       <img class="capture-preview" src="${previewUrl}" alt="Bin photo">
-      <div id="ocr-status" class="muted" style="margin-bottom:12px">Reading text…</div>
       <div class="label-field">
-        <label for="bin-description">Description</label>
-        <textarea class="text-area" id="bin-description" placeholder="Detected text will appear here"></textarea>
+        <label for="bin-description">Description (optional)</label>
+        <textarea class="text-area" id="bin-description" placeholder="Name this bin, or leave blank"></textarea>
+        <div id="ocr-status" class="muted" style="margin-top:4px;font-size:0.85rem">Reading any text…</div>
       </div>
-      <button type="button" class="btn btn-primary" id="btn-continue" disabled>Continue to recording</button>
-      <button type="button" class="btn btn-secondary" id="btn-retake" style="margin-top:8px">Retake photo</button>
+      <button type="button" class="btn btn-primary" id="btn-use-photo">✓ Use This Photo</button>
+      <button type="button" class="btn btn-secondary" id="btn-retake" style="margin-top:8px">↺ Retake Photo</button>
       <button type="button" class="btn btn-secondary" id="btn-cancel-photo" style="margin-top:8px">Cancel</button>
     </div>
   `;
@@ -166,22 +175,22 @@ async function showPhotoReview(photoBlob) {
 
   const statusEl = overlay.querySelector('#ocr-status');
   const descEl = overlay.querySelector('#bin-description');
-  const continueBtn = overlay.querySelector('#btn-continue');
+  const useBtn = overlay.querySelector('#btn-use-photo');
 
-  try {
-    const text = await recognizeTextFromBlob(resized, (msg) => {
-      statusEl.textContent = msg;
+  // Non-blocking OCR: the user can proceed immediately; if text is found and
+  // they haven't typed anything, we fill it in.
+  recognizeTextFromBlob(resized, (msg) => { statusEl.textContent = msg; })
+    .then((text) => {
+      if (text && !descEl.value.trim()) descEl.value = text;
+      statusEl.textContent = text ? 'Detected text added — edit if needed' : 'No text detected';
+    })
+    .catch(() => {
+      statusEl.textContent = 'Text recognition unavailable — type a description if you like';
     });
-    descEl.value = text;
-    statusEl.textContent = text ? 'Text detected — edit if needed' : 'No text detected — add a description or leave blank';
-  } catch (e) {
-    statusEl.textContent = 'Text recognition unavailable — add a description manually or leave blank';
-  }
 
-  continueBtn.disabled = false;
-
-  continueBtn.addEventListener('click', async () => {
-    continueBtn.disabled = true;
+  useBtn.addEventListener('click', async () => {
+    useBtn.disabled = true;
+    useBtn.textContent = 'Saving…';
     const description = descEl.value;
     const thumb = await createThumbnail(resized);
     const bin = await createBinFromPhoto({
@@ -189,11 +198,13 @@ async function showPhotoReview(photoBlob) {
       binPhotoBlob: resized,
       binPhotoThumbnail: thumb,
     });
+    URL.revokeObjectURL(previewUrl);
     overlay.remove();
-    startRecordingForBin(bin.id);
+    showStartRecording(bin.id, blobToObjectUrl(thumb));
   });
 
   overlay.querySelector('#btn-retake').addEventListener('click', () => {
+    URL.revokeObjectURL(previewUrl);
     overlay.remove();
     startPhotoCapture();
   });
@@ -204,10 +215,45 @@ async function showPhotoReview(photoBlob) {
   });
 }
 
+// Step 3: bin exists — offer to start recording items, or skip.
+function showStartRecording(binId, thumbUrl) {
+  const overlay = document.createElement('div');
+  overlay.className = 'camera-view';
+  overlay.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px;gap:16px;background:var(--bg);text-align:center">
+      <div style="font-size:2rem">✅</div>
+      <h2 style="margin:0">Bin saved</h2>
+      ${thumbUrl ? `<img src="${thumbUrl}" alt="Bin" style="width:120px;height:120px;object-fit:cover;border-radius:12px;align-self:center">` : ''}
+      <p class="muted" style="margin:0">Next, record a short video while you add items. Hold each item up to the camera, then tap Done when finished.</p>
+      <button type="button" class="btn btn-primary" id="btn-start-items">▶ Start Adding Items</button>
+      <button type="button" class="btn btn-secondary" id="btn-skip-items">Skip for now</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  addCleanup(() => {
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    overlay.remove();
+  });
+
+  overlay.querySelector('#btn-start-items').addEventListener('click', () => {
+    if (thumbUrl) URL.revokeObjectURL(thumbUrl);
+    overlay.remove();
+    startRecordingForBin(binId);
+  });
+
+  overlay.querySelector('#btn-skip-items').addEventListener('click', () => {
+    runCleanup();
+    showToast('Bin saved');
+    navigate('bin-detail', { id: binId });
+  });
+}
+
 async function startRecordingForBin(binId, existingVideo = null) {
   const overlay = buildCameraOverlay({
-    hint: 'Hold each item in front of the camera, then drop it in the bin',
+    hint: 'Hold each item up to the camera, then set it in the bin',
     recording: true,
+    doneLabel: '✓ Done Adding Items',
     cancelLabel: 'Cancel',
   });
 
@@ -247,7 +293,7 @@ async function startRecordingForBin(binId, existingVideo = null) {
     if (!confirmDialog('Discard this recording?')) return;
     await recorderWrap.stop();
     runCleanup();
-    navigate('bins');
+    navigate('bin-detail', { id: binId });
   };
 
   overlay.cancelBtn.addEventListener('click', cancelRecording);
@@ -300,7 +346,7 @@ async function showReviewGrid(binId, frames) {
     const kept = activeFrames.filter((f) => !f.deleted);
     overlay.innerHTML = `
       <div class="review-meta">
-        <span class="review-count">${kept.length} frame${kept.length === 1 ? '' : 's'} selected</span>
+        <span class="review-count">${kept.length} item${kept.length === 1 ? '' : 's'} selected</span>
         <span class="muted">Tap to remove</span>
       </div>
       <div class="photo-grid" id="review-grid"></div>
@@ -384,7 +430,7 @@ async function showReviewGrid(binId, frames) {
   render();
 }
 
-function buildCameraOverlay({ hint, showScanFrame = false, recording = false, captureLabel, cancelLabel = 'Cancel' }) {
+function buildCameraOverlay({ hint, showScanFrame = false, recording = false, captureLabel, doneLabel = 'Done', cancelLabel = 'Cancel' }) {
   const overlay = document.createElement('div');
   overlay.className = 'camera-view';
   overlay.innerHTML = `
@@ -397,8 +443,8 @@ function buildCameraOverlay({ hint, showScanFrame = false, recording = false, ca
     </div>
     <div class="camera-controls">
       <p class="camera-hint">${escapeHtml(hint)}</p>
-      ${captureLabel ? `<button type="button" class="btn btn-primary" id="btn-capture">${escapeHtml(captureLabel)}</button>` : ''}
-      <button type="button" class="btn btn-danger btn-stop hidden" id="btn-stop">STOP</button>
+      ${captureLabel ? `<button type="button" class="btn btn-primary btn-capture" id="btn-capture">${escapeHtml(captureLabel)}</button>` : ''}
+      <button type="button" class="btn btn-danger btn-stop hidden" id="btn-stop">${escapeHtml(doneLabel)}</button>
       <button type="button" class="btn btn-secondary" id="btn-cancel">${escapeHtml(cancelLabel)}</button>
     </div>
   `;
@@ -414,6 +460,7 @@ function buildCameraOverlay({ hint, showScanFrame = false, recording = false, ca
     stopBtn: overlay.querySelector('#btn-stop'),
     cancelBtn: overlay.querySelector('#btn-cancel'),
     captureBtn: overlay.querySelector('#btn-capture'),
+    remove: () => overlay.remove(),
   };
 }
 
