@@ -41,7 +41,7 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   const done = page.getByRole('button', { name: '✓ Done Adding Items' });
   await expect(done).toBeVisible();
 
-  // Record for a bit so there are frames to extract, then finish.
+  // Record for a bit so live capture collects some frames, then finish.
   await page.waitForTimeout(1500);
   await done.click();
 

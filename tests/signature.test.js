@@ -3,7 +3,7 @@ import {
   SIGNATURE_SIZE,
   signatureFromImageData,
   signatureDistance,
-} from '../js/frame-extract.js';
+} from '../js/signature.js';
 
 // Build a fake ImageData-shaped object from a per-pixel grayscale function.
 function fakeImageData(pixelFn) {

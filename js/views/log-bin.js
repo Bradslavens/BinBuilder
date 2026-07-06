@@ -4,8 +4,7 @@ import { startCamera, stopCamera, capturePhotoFromVideo } from '../camera.js';
 import { startQrScanLoop } from '../qr-scan.js';
 import { recognizeTextFromBlob } from '../ocr.js';
 import { createThumbnail, resizeImageBlob } from '../thumbnails.js';
-import { createRecorder } from '../recorder.js';
-import { extractFrames } from '../frame-extract.js';
+import { createLiveCapture } from '../live-capture.js';
 import { playScanSuccess, playSaveSuccess, vibrateSuccess } from '../audio.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml, wait } from '../utils.js';
 
@@ -269,7 +268,7 @@ function showStartRecording(binId, thumbUrl) {
   });
 }
 
-async function startRecordingForBin(binId, existingVideo = null) {
+async function startRecordingForBin(binId) {
   const overlay = buildCameraOverlay({
     hint: 'Get your first item ready…',
     recording: true,
@@ -277,15 +276,10 @@ async function startRecordingForBin(binId, existingVideo = null) {
     cancelLabel: 'Cancel',
   });
 
-  const { video, stopBtn, recordingBar, hintEl } = overlay;
+  const { video, stopBtn, recordingBar, hintEl, flashEl } = overlay;
 
   try {
-    if (existingVideo?.srcObject) {
-      video.srcObject = existingVideo.srcObject;
-      await video.play();
-    } else {
-      await startCamera(video);
-    }
+    await startCamera(video);
   } catch (e) {
     showPermissionError(e.message);
     runCleanup();
@@ -317,25 +311,26 @@ async function startRecordingForBin(binId, existingVideo = null) {
   overlay.cancelBtn.removeEventListener('click', cancelEarly);
   hintEl.textContent = 'Hold each item steady for a second, then set it in the bin';
 
-  const stream = video.srcObject;
-  let recorderWrap;
-
-  try {
-    recorderWrap = createRecorder(stream);
-    recorderWrap.start();
-  } catch (e) {
-    showToast(e.message);
-    runCleanup();
-    navigate('home');
-    return;
-  }
+  // Frames are captured live off the preview while the user works, so there
+  // is no video recording or post-hoc extraction step to wait on.
+  const recordingLabel = recordingBar.querySelector('.recording-label');
+  const capture = createLiveCapture(video, {
+    onCapture: (count) => {
+      recordingLabel.textContent = `RECORDING — ${count} item${count === 1 ? '' : 's'}`;
+      flashEl.classList.add('flash-success');
+      vibrateSuccess(50);
+      setTimeout(() => flashEl.classList.remove('flash-success'), 300);
+    },
+  });
+  capture.start();
+  addCleanup(() => capture.stop());
 
   recordingBar.classList.remove('hidden');
   stopBtn.classList.remove('hidden');
 
   const cancelRecording = async () => {
     if (!confirmDialog('Discard this recording?')) return;
-    await recorderWrap.stop();
+    await capture.stop();
     runCleanup();
     navigate('bin-detail', { id: binId });
   };
@@ -346,37 +341,18 @@ async function startRecordingForBin(binId, existingVideo = null) {
     stopBtn.disabled = true;
     recordingBar.classList.add('hidden');
 
-    const processing = showProcessing('Processing video…');
-    try {
-      const blob = await recorderWrap.stop();
-      stopCamera();
-      overlay.remove();
+    const frames = await capture.stop();
+    stopCamera();
+    overlay.remove();
 
-      processing.update('Extracting frames…');
-      const frames = await extractFrames(blob, {
-        useSceneChange: true,
-        autoDiscardBlurry: true,
-        onProgress: (p) => {
-          processing.update(`Extracting frames… ${Math.round(p * 100)}%`);
-        },
-      });
-
-      processing.remove();
-
-      if (!frames.length) {
-        showToast('No usable frames found. Try recording again with steadier hands.');
-        runCleanup();
-        navigate('bin-detail', { id: binId });
-        return;
-      }
-
-      await showReviewGrid(binId, frames);
-    } catch (e) {
-      processing.remove();
-      showToast(e.message || 'Processing failed — try again');
+    if (!frames.length) {
+      showToast('No usable frames found. Try recording again with steadier hands.');
       runCleanup();
       navigate('bin-detail', { id: binId });
+      return;
     }
+
+    await showReviewGrid(binId, frames);
   });
 }
 
@@ -521,22 +497,6 @@ function buildCameraOverlay({ hint, showScanFrame = false, recording = false, ca
     remove: () => {
       releaseVideo();
       overlay.remove();
-    },
-  };
-}
-
-function showProcessing(message) {
-  const el = document.createElement('div');
-  el.className = 'processing-overlay';
-  el.innerHTML = `<div class="spinner"></div><p id="proc-msg" style="margin:0;text-align:center">${escapeHtml(message)}</p>`;
-  document.body.appendChild(el);
-
-  return {
-    update(msg) {
-      el.querySelector('#proc-msg').textContent = msg;
-    },
-    remove() {
-      el.remove();
     },
   };
 }
