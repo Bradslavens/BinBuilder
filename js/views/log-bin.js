@@ -244,7 +244,7 @@ function showStartRecording(binId, thumbUrl) {
       <div style="font-size:2rem">✅</div>
       <h2 style="margin:0">Bin saved</h2>
       ${thumbUrl ? `<img src="${thumbUrl}" alt="Bin" style="width:120px;height:120px;object-fit:cover;border-radius:12px;align-self:center">` : ''}
-      <p class="muted" style="margin:0">Next, record a short video while you add items. Hold each item up to the camera, then tap Done when finished.</p>
+      <p class="muted" style="margin:0">Next, record a short video while you add items. Hold each item steady in front of the camera for a second, then tap Done when finished.</p>
       <button type="button" class="btn btn-primary" id="btn-start-items">▶ Start Adding Items</button>
       <button type="button" class="btn btn-secondary" id="btn-skip-items">Skip for now</button>
     </div>
@@ -271,7 +271,7 @@ function showStartRecording(binId, thumbUrl) {
 
 async function startRecordingForBin(binId, existingVideo = null) {
   const overlay = buildCameraOverlay({
-    hint: 'Hold each item up to the camera, then set it in the bin',
+    hint: 'Hold each item steady for a second, then set it in the bin',
     recording: true,
     doneLabel: '✓ Done Adding Items',
     cancelLabel: 'Cancel',

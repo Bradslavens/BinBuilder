@@ -40,35 +40,40 @@ async function seekVideo(video, time) {
   await waitForEvent(video, 'seeked');
 }
 
-function histogramDiff(ctx, w, h) {
-  const data = ctx.getImageData(0, 0, w, h).data;
-  const bins = 32;
-  const hist = new Float32Array(bins);
-  let pixels = 0;
+export const SIGNATURE_SIZE = 16;
 
-  for (let i = 0; i < data.length; i += 16) {
-    const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
-    const bin = Math.min(bins - 1, Math.floor((lum / 255) * bins));
-    hist[bin]++;
-    pixels++;
+// Tiny grayscale fingerprint of a frame, mean-centered so a global exposure
+// shift (phone auto-adjusting brightness) doesn't register as new content.
+export function signatureFromImageData(imageData) {
+  const { data } = imageData;
+  const sig = new Float32Array(data.length / 4);
+  let mean = 0;
+
+  for (let i = 0; i < sig.length; i++) {
+    const j = i * 4;
+    sig[i] = (data[j] + data[j + 1] + data[j + 2]) / 3;
+    mean += sig[i];
   }
 
-  if (pixels === 0) return hist;
-  for (let i = 0; i < bins; i++) hist[i] /= pixels;
-  return hist;
+  mean /= sig.length;
+  for (let i = 0; i < sig.length; i++) sig[i] -= mean;
+  return sig;
 }
 
-function histDistance(a, b) {
+// Mean absolute difference, normalized to 0..1.
+export function signatureDistance(a, b) {
   let sum = 0;
   for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
-  return sum;
+  return sum / a.length / 255;
 }
 
 export async function extractFrames(videoBlob, options = {}) {
   const {
     intervalSec = 1,
     useSceneChange = true,
-    sceneThreshold = 0.18,
+    motionThreshold = 0.03,
+    dupThreshold = 0.05,
+    stableSamplesNeeded = 2,
     blurThreshold = 120,
     autoDiscardBlurry = true,
     onProgress,
@@ -92,58 +97,104 @@ export async function extractFrames(videoBlob, options = {}) {
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const frames = [];
-    let prevHist = null;
 
-    const captureAt = async (time) => {
+    const sigCanvas = document.createElement('canvas');
+    sigCanvas.width = SIGNATURE_SIZE;
+    sigCanvas.height = SIGNATURE_SIZE;
+    const sigCtx = sigCanvas.getContext('2d', { willReadFrequently: true });
+
+    const drawAt = async (time) => {
       await seekVideo(video, Math.min(time, duration - 0.05));
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
+    };
+
+    const currentSignature = () => {
+      sigCtx.drawImage(canvas, 0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE);
+      return signatureFromImageData(
+        sigCtx.getImageData(0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE)
+      );
+    };
+
+    const frames = [];
+    let lastKeptSig = null;
+
+    // Try to keep the frame currently on `canvas`. Returns:
+    //  'kept'      — new item, sharp, saved
+    //  'duplicate' — same content we already saved; no point retrying
+    //  'blurry'    — new content but out of focus; worth retrying later
+    const tryKeepCurrent = async (time, sig = currentSignature()) => {
+      if (lastKeptSig && signatureDistance(sig, lastKeptSig) < dupThreshold) {
+        return 'duplicate';
+      }
 
       const blurScore = blurScoreFromCanvas(canvas);
       const blurry = blurScore < blurThreshold;
-
-      if (autoDiscardBlurry && blurry) return null;
+      if (autoDiscardBlurry && blurry) return 'blurry';
 
       const blob = await canvasToJpegBlob(canvas, 0.85);
-      return {
+      frames.push({
         blob,
         time,
         blurScore,
         blurry,
         deleted: false,
         label: '',
-      };
+      });
+      lastKeptSig = sig;
+      return 'kept';
     };
 
-    if (useSceneChange) {
-      const step = 0.25;
-      for (let t = 0; t < duration; t += step) {
-        await seekVideo(video, t);
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-
-        const hist = histogramDiff(ctx, canvas.width, canvas.height);
-        const changed = !prevHist || histDistance(prevHist, hist) > sceneThreshold;
-
-        if (changed) {
-          const frame = await captureAt(t);
-          if (frame) frames.push(frame);
-          prevHist = hist;
-        }
-
-        if (onProgress) onProgress(Math.min(1, t / duration));
-      }
-    } else {
+    const intervalScan = async (progressFrom) => {
       const count = Math.max(1, Math.floor(duration / intervalSec));
       for (let i = 0; i <= count; i++) {
         const t = Math.min(i * intervalSec, duration - 0.05);
-        const frame = await captureAt(t);
-        if (frame) frames.push(frame);
-        if (onProgress) onProgress(i / count);
+        await drawAt(t);
+        await tryKeepCurrent(t);
+        if (onProgress) {
+          onProgress(progressFrom + (1 - progressFrom) * (i / count));
+        }
       }
+    };
+
+    if (useSceneChange) {
+      // Capture on stability: while the user is moving (swapping items) the
+      // signature jumps between consecutive samples; once they hold an item
+      // steady for a couple of samples, grab one frame of it. The signature
+      // dedup in tryKeepCurrent guarantees at most one kept frame per item,
+      // however long they hold it.
+      const step = 0.25;
+      let prevSig = null;
+      let stableRun = 0;
+
+      for (let t = 0; t < duration; t += step) {
+        await drawAt(t);
+        const sig = currentSignature();
+        const moving = prevSig
+          ? signatureDistance(sig, prevSig) > motionThreshold
+          : false;
+        prevSig = sig;
+
+        if (moving) {
+          stableRun = 0;
+        } else {
+          stableRun++;
+          if (stableRun >= stableSamplesNeeded) {
+            await tryKeepCurrent(t, sig);
+          }
+        }
+
+        if (onProgress) onProgress(Math.min(0.8, (t / duration) * 0.8));
+      }
+
+      // Nothing held steady long enough (shaky hands, constant motion):
+      // fall back to sampling at a fixed interval, still deduped.
+      if (!frames.length) {
+        await intervalScan(0.8);
+      }
+    } else {
+      await intervalScan(0);
     }
 
     if (onProgress) onProgress(1);
