@@ -271,13 +271,13 @@ function showStartRecording(binId, thumbUrl) {
 
 async function startRecordingForBin(binId, existingVideo = null) {
   const overlay = buildCameraOverlay({
-    hint: 'Hold each item steady for a second, then set it in the bin',
+    hint: 'Get your first item ready…',
     recording: true,
     doneLabel: '✓ Done Adding Items',
     cancelLabel: 'Cancel',
   });
 
-  const { video, stopBtn, recordingBar } = overlay;
+  const { video, stopBtn, recordingBar, hintEl } = overlay;
 
   try {
     if (existingVideo?.srcObject) {
@@ -292,6 +292,30 @@ async function startRecordingForBin(binId, existingVideo = null) {
     navigate('home');
     return;
   }
+
+  // Countdown before recording starts, so the opening seconds — camera
+  // pointed at the background while the user grabs their first item —
+  // never make it into the video as extractable frames.
+  let aborted = false;
+  const cancelEarly = () => {
+    aborted = true;
+    runCleanup();
+    navigate('bin-detail', { id: binId });
+  };
+  overlay.cancelBtn.addEventListener('click', cancelEarly);
+
+  const countEl = document.createElement('div');
+  countEl.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:7rem;font-weight:700;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);pointer-events:none;z-index:5';
+  overlay.overlay.appendChild(countEl);
+
+  for (let n = 3; n >= 1; n--) {
+    countEl.textContent = String(n);
+    await wait(1000);
+    if (aborted) return;
+  }
+  countEl.remove();
+  overlay.cancelBtn.removeEventListener('click', cancelEarly);
+  hintEl.textContent = 'Hold each item steady for a second, then set it in the bin';
 
   const stream = video.srcObject;
   let recorderWrap;
@@ -349,9 +373,9 @@ async function startRecordingForBin(binId, existingVideo = null) {
       await showReviewGrid(binId, frames);
     } catch (e) {
       processing.remove();
-      showToast(e.message || 'Processing failed');
+      showToast(e.message || 'Processing failed — try again');
       runCleanup();
-      navigate('home');
+      navigate('bin-detail', { id: binId });
     }
   });
 }
@@ -469,18 +493,35 @@ function buildCameraOverlay({ hint, showScanFrame = false, recording = false, ca
     </div>
   `;
 
+  const video = overlay.querySelector('video');
+
+  // Detach the stream when the overlay goes away — leaving srcObject set
+  // keeps an iOS media decoder alive, and the pool is small enough that
+  // later videos (like frame extraction) can hang waiting for one.
+  const releaseVideo = () => {
+    video.pause();
+    video.srcObject = null;
+  };
+
   document.body.appendChild(overlay);
-  addCleanup(() => overlay.remove());
+  addCleanup(() => {
+    releaseVideo();
+    overlay.remove();
+  });
 
   return {
     overlay,
-    video: overlay.querySelector('video'),
+    video,
     flashEl: overlay.querySelector('#flash-overlay'),
     recordingBar: overlay.querySelector('#recording-bar'),
     stopBtn: overlay.querySelector('#btn-stop'),
     cancelBtn: overlay.querySelector('#btn-cancel'),
     captureBtn: overlay.querySelector('#btn-capture'),
-    remove: () => overlay.remove(),
+    hintEl: overlay.querySelector('.camera-hint'),
+    remove: () => {
+      releaseVideo();
+      overlay.remove();
+    },
   };
 }
 

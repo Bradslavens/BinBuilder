@@ -62,6 +62,17 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
 
   await expect(page.getByRole('heading', { name: 'Garage — Camping Gear' })).toBeVisible();
   await expect(page.locator('#main p.muted', { hasText: 'Tent, stove, lantern' })).toBeVisible();
+
+  // Second round: "Add more items" must work after a completed session
+  // (regression test for extraction hanging on reuse).
+  await page.getByRole('button', { name: 'Add more items' }).click();
+  await expect(page.getByText('RECORDING')).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: '✓ Done Adding Items' }).click();
+  const saveMore = page.getByRole('button', { name: 'Save items' });
+  await expect(saveMore).toBeVisible({ timeout: 20_000 });
+  await saveMore.click();
+  await expect(page.getByRole('button', { name: 'Add more items' })).toBeVisible();
 });
 
 test('skip recording, then create / edit / delete a text item', async ({ page }) => {

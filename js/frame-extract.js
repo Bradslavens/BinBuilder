@@ -1,7 +1,10 @@
 import { blurScoreFromCanvas } from './blur.js';
 import { canvasToJpegBlob } from './utils.js';
 
-function waitForEvent(el, event) {
+// Timeouts matter: iOS Safari can silently never fire these events (e.g.
+// when its media-decoder pool is exhausted), which would otherwise hang the
+// "Extracting frames" step forever.
+function waitForEvent(el, event, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     const onOk = () => {
       cleanup();
@@ -11,7 +14,12 @@ function waitForEvent(el, event) {
       cleanup();
       reject(new Error(`Video ${event} failed`));
     };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Video ${event} timed out`));
+    }, timeoutMs);
     const cleanup = () => {
+      clearTimeout(timer);
       el.removeEventListener(event, onOk);
       el.removeEventListener('error', onErr);
     };
@@ -37,7 +45,7 @@ async function getVideoDuration(video) {
 async function seekVideo(video, time) {
   if (Math.abs(video.currentTime - time) < 0.05) return;
   video.currentTime = time;
-  await waitForEvent(video, 'seeked');
+  await waitForEvent(video, 'seeked', 5000);
 }
 
 export const SIGNATURE_SIZE = 16;
@@ -78,6 +86,8 @@ export async function extractFrames(videoBlob, options = {}) {
     autoDiscardBlurry = true,
     onProgress,
   } = options;
+
+  if (!videoBlob || !videoBlob.size) return [];
 
   const video = document.createElement('video');
   video.muted = true;
@@ -200,7 +210,13 @@ export async function extractFrames(videoBlob, options = {}) {
     if (onProgress) onProgress(1);
     return frames;
   } finally {
+    // Fully release the media element. Without load(), iOS Safari keeps its
+    // decoder allocated; after a few extractions the pool is exhausted and
+    // the next video never fires loadedmetadata.
+    video.pause();
     URL.revokeObjectURL(url);
+    video.removeAttribute('src');
+    video.load();
     video.remove();
   }
 }
