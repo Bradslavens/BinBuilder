@@ -4,6 +4,7 @@ import {
   SIGNATURE_SIZE,
   signatureFromImageData,
   signatureDistance,
+  changedCellFraction,
 } from './signature.js';
 
 // Captures item frames directly off the live camera preview while the user
@@ -11,15 +12,19 @@ import {
 // have no seek index, so the old post-hoc extraction cost grew quadratically
 // with session length — long sessions looked hung on "Extracting frames".
 //
-// Same capture model as before: while the user is moving (swapping items) the
-// signature jumps between consecutive samples; once they hold an item steady
-// for a couple of samples, keep one sharp frame of it. Signature dedup
-// guarantees at most one kept frame per item, however long they hold it.
+// Capture model: while the user is moving (swapping items) the signature
+// jumps between consecutive samples; once they hold an item steady for a
+// couple of samples, keep one sharp frame of it. Each steady hold captures at
+// most once (drift within a hold must not re-trigger), and a candidate is
+// rejected when it matches ANY previously kept frame — either nearly
+// identical (the background seen again between items) or differing only in a
+// small region (the bin scene after one more item was set into it).
 export function createLiveCapture(video, options = {}) {
   const {
     sampleIntervalMs = 250,
     motionThreshold = 0.03,
     dupThreshold = 0.05,
+    minChangedFraction = 0.12,
     stableSamplesNeeded = 2,
     blurThreshold = 120,
     autoDiscardBlurry = true,
@@ -37,43 +42,35 @@ export function createLiveCapture(video, options = {}) {
   const sigCtx = sigCanvas.getContext('2d', { willReadFrequently: true });
 
   const frames = [];
+  const keptSigs = [];
   const fallbackFrames = [];
   let running = false;
   let loopDone = null;
 
-  // Try to keep the frame currently on `canvas` in `list`, deduped against
-  // the last frame kept in that list.
-  function makeKeeper(list) {
-    let lastKeptSig = null;
-    return async (sig, time) => {
-      if (lastKeptSig && signatureDistance(sig, lastKeptSig) < dupThreshold) {
-        return 'duplicate';
-      }
+  // Same content as an earlier capture: nearly identical overall, or only a
+  // small part of the frame changed (item added to an already-captured scene).
+  const matchesKeptFrame = (sig) =>
+    keptSigs.some(
+      (kept) =>
+        signatureDistance(sig, kept) < dupThreshold ||
+        changedCellFraction(sig, kept) < minChangedFraction
+    );
 
-      const blurScore = blurScoreFromCanvas(canvas);
-      const blurry = blurScore < blurThreshold;
-      if (autoDiscardBlurry && blurry) return 'blurry';
+  const snapshotFrame = async (time) => {
+    const blurScore = blurScoreFromCanvas(canvas);
+    const blurry = blurScore < blurThreshold;
+    if (autoDiscardBlurry && blurry) return null;
 
-      const blob = await canvasToJpegBlob(canvas, 0.85);
-      list.push({
-        blob,
-        time,
-        blurScore,
-        blurry,
-        deleted: false,
-        label: '',
-      });
-      lastKeptSig = sig;
-      return 'kept';
-    };
-  }
+    const blob = await canvasToJpegBlob(canvas, 0.85);
+    return { blob, time, blurScore, blurry, deleted: false, label: '' };
+  };
 
   async function loop() {
-    const keepStable = makeKeeper(frames);
-    const keepFallback = makeKeeper(fallbackFrames);
     const startedAt = performance.now();
     let prevSig = null;
     let stableRun = 0;
+    let capturedThisHold = false;
+    let lastFallbackSig = null;
     let nextFallbackTime = 0;
 
     while (running) {
@@ -98,11 +95,23 @@ export function createLiveCapture(video, options = {}) {
 
           if (moving) {
             stableRun = 0;
+            capturedThisHold = false;
           } else {
             stableRun++;
-            if (stableRun >= stableSamplesNeeded) {
-              const result = await keepStable(sig, time);
-              if (result === 'kept' && onCapture) onCapture(frames.length);
+            if (!capturedThisHold && stableRun >= stableSamplesNeeded) {
+              if (matchesKeptFrame(sig)) {
+                capturedThisHold = true;
+              } else {
+                // A blurry sample is retried next tick — autofocus may still
+                // be settling on the newly raised item.
+                const frame = await snapshotFrame(time);
+                if (frame) {
+                  frames.push(frame);
+                  keptSigs.push(sig);
+                  capturedThisHold = true;
+                  if (onCapture) onCapture(frames.length);
+                }
+              }
             }
           }
 
@@ -111,10 +120,15 @@ export function createLiveCapture(video, options = {}) {
           if (
             !frames.length &&
             time >= nextFallbackTime &&
-            fallbackFrames.length < maxFallbackFrames
+            fallbackFrames.length < maxFallbackFrames &&
+            !(lastFallbackSig && signatureDistance(sig, lastFallbackSig) < dupThreshold)
           ) {
-            await keepFallback(sig, time);
-            nextFallbackTime = time + fallbackIntervalMs / 1000;
+            const frame = await snapshotFrame(time);
+            if (frame) {
+              fallbackFrames.push(frame);
+              lastFallbackSig = sig;
+              nextFallbackTime = time + fallbackIntervalMs / 1000;
+            }
           }
         }
       } catch (e) {

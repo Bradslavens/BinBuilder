@@ -309,7 +309,7 @@ async function startRecordingForBin(binId) {
   }
   countEl.remove();
   overlay.cancelBtn.removeEventListener('click', cancelEarly);
-  hintEl.textContent = 'Hold each item steady for a second, then set it in the bin';
+  hintEl.textContent = 'Hold each item up close so it fills the screen, steady for a second';
 
   // Frames are captured live off the preview while the user works, so there
   // is no video recording or post-hoc extraction step to wait on.
