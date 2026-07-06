@@ -320,6 +320,7 @@ body {
 
 .camera-video {
   flex: 1;
+  min-height: 0;
   width: 100%;
   object-fit: cover;
   background: #000;

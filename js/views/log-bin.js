@@ -112,6 +112,13 @@ async function startPhotoCapture() {
 
   const { video } = overlay;
 
+  // Keep capture disabled until the camera is actually producing frames, so
+  // neither the user nor an automated test can trigger a capture before the
+  // video has real dimensions.
+  overlay.captureBtn.disabled = true;
+  const originalCaptureLabel = overlay.captureBtn.textContent;
+  overlay.captureBtn.textContent = 'Starting camera…';
+
   try {
     await startCamera(video);
   } catch (e) {
@@ -121,12 +128,16 @@ async function startPhotoCapture() {
     return;
   }
 
+  await waitForVideoReady(video);
+  overlay.captureBtn.textContent = originalCaptureLabel;
+  overlay.captureBtn.disabled = false;
+
   overlay.captureBtn.addEventListener('click', async () => {
     overlay.captureBtn.disabled = true;
     overlay.captureBtn.textContent = 'Capturing…';
 
     // The video may not have reported dimensions yet on slower devices.
-    for (let i = 0; i < 10 && !video.videoWidth; i++) {
+    for (let i = 0; i < 20 && !video.videoWidth; i++) {
       await wait(100);
     }
 
@@ -138,9 +149,18 @@ async function startPhotoCapture() {
     } catch (e) {
       showToast(e.message || 'Capture failed — try again');
       overlay.captureBtn.disabled = false;
-      overlay.captureBtn.textContent = '📷 Take Photo';
+      overlay.captureBtn.textContent = originalCaptureLabel;
     }
   });
+}
+
+// Resolve once the video reports real dimensions (or after a timeout so we
+// never hang the UI forever).
+async function waitForVideoReady(video, timeoutMs = 5000) {
+  const deadline = timeoutMs / 100;
+  for (let i = 0; i < deadline && !video.videoWidth; i++) {
+    await wait(100);
+  }
 }
 
 // Step 2: confirm the single still photo. OCR runs in the background and

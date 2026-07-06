@@ -22,6 +22,10 @@ Thumbs.db
 
 # Test / tooling artifacts
 .playwright-mcp/
+test-results/
+playwright-report/
+blob-report/
+.cache/
 
 # Optional local overrides
 *.local

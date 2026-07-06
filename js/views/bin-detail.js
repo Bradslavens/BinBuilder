@@ -47,7 +47,7 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
         <input type="text" class="text-input" id="quick-add-input" placeholder="Item description">
         <button type="button" class="btn btn-primary" id="btn-save-quick">Save text item</button>
       </div>
-      <p class="muted" style="margin:0">${items.length} item${items.length === 1 ? '' : 's'}</p>
+      <p class="muted" style="margin:0" id="item-count">${items.length} item${items.length === 1 ? '' : 's'}</p>
       <div class="photo-grid" id="item-grid"></div>
       <button type="button" class="btn btn-danger" id="btn-delete-bin">Delete bin</button>
     </div>
@@ -129,6 +129,10 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
 
 async function refreshGrid(grid, binId) {
   const items = await getItemsForBin(binId);
+  const countEl = document.getElementById('item-count');
+  if (countEl) {
+    countEl.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  }
   grid.innerHTML = '';
   if (!items.length) {
     grid.innerHTML = '<p class="muted">No items yet.</p>';
