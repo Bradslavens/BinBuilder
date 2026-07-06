@@ -4,7 +4,6 @@ import { startCamera, stopCamera, capturePhotoFromVideo } from '../camera.js';
 import { startQrScanLoop } from '../qr-scan.js';
 import { recognizeTextFromBlob } from '../ocr.js';
 import { createThumbnail, resizeImageBlob } from '../thumbnails.js';
-import { createLiveCapture } from '../live-capture.js';
 import { playScanSuccess, playSaveSuccess, vibrateSuccess } from '../audio.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml, wait } from '../utils.js';
 
@@ -27,7 +26,7 @@ export function startLogBin(existingBinId = null) {
   hideChrome();
 
   if (existingBinId) {
-    startRecordingForBin(existingBinId);
+    startItemCapture(existingBinId);
     return;
   }
 
@@ -243,7 +242,7 @@ function showStartRecording(binId, thumbUrl) {
       <div style="font-size:2rem">✅</div>
       <h2 style="margin:0">Bin saved</h2>
       ${thumbUrl ? `<img src="${thumbUrl}" alt="Bin" style="width:120px;height:120px;object-fit:cover;border-radius:12px;align-self:center">` : ''}
-      <p class="muted" style="margin:0">Next, record a short video while you add items. Hold each item steady in front of the camera for a second, then tap Done when finished.</p>
+      <p class="muted" style="margin:0">Next, add your items: point the camera at each item and tap the screen to capture it. Tap Done when finished.</p>
       <button type="button" class="btn btn-primary" id="btn-start-items">▶ Start Adding Items</button>
       <button type="button" class="btn btn-secondary" id="btn-skip-items">Skip for now</button>
     </div>
@@ -258,7 +257,7 @@ function showStartRecording(binId, thumbUrl) {
   overlay.querySelector('#btn-start-items').addEventListener('click', () => {
     if (thumbUrl) URL.revokeObjectURL(thumbUrl);
     overlay.remove();
-    startRecordingForBin(binId);
+    startItemCapture(binId);
   });
 
   overlay.querySelector('#btn-skip-items').addEventListener('click', () => {
@@ -268,15 +267,17 @@ function showStartRecording(binId, thumbUrl) {
   });
 }
 
-async function startRecordingForBin(binId) {
+// The user taps the screen once per item — no motion heuristics deciding
+// what counts as an item, so no background frames and no duplicates.
+async function startItemCapture(binId) {
   const overlay = buildCameraOverlay({
-    hint: 'Get your first item ready…',
-    recording: true,
+    hint: 'Starting camera…',
+    counter: true,
     doneLabel: '✓ Done Adding Items',
     cancelLabel: 'Cancel',
   });
 
-  const { video, stopBtn, recordingBar, hintEl, flashEl } = overlay;
+  const { video, stopBtn, counterEl, hintEl, flashEl } = overlay;
 
   try {
     await startCamera(video);
@@ -287,66 +288,59 @@ async function startRecordingForBin(binId) {
     return;
   }
 
-  // Countdown before recording starts, so the opening seconds — camera
-  // pointed at the background while the user grabs their first item —
-  // never make it into the video as extractable frames.
-  let aborted = false;
-  const cancelEarly = () => {
-    aborted = true;
-    runCleanup();
-    navigate('bin-detail', { id: binId });
-  };
-  overlay.cancelBtn.addEventListener('click', cancelEarly);
-
-  const countEl = document.createElement('div');
-  countEl.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:7rem;font-weight:700;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);pointer-events:none;z-index:5';
-  overlay.overlay.appendChild(countEl);
-
-  for (let n = 3; n >= 1; n--) {
-    countEl.textContent = String(n);
-    await wait(1000);
-    if (aborted) return;
-  }
-  countEl.remove();
-  overlay.cancelBtn.removeEventListener('click', cancelEarly);
-  hintEl.textContent = 'Hold each item up close so it fills the screen, steady for a second';
-
-  // Frames are captured live off the preview while the user works, so there
-  // is no video recording or post-hoc extraction step to wait on.
-  const recordingLabel = recordingBar.querySelector('.recording-label');
-  const capture = createLiveCapture(video, {
-    onCapture: (count) => {
-      recordingLabel.textContent = `RECORDING — ${count} item${count === 1 ? '' : 's'}`;
-      flashEl.classList.add('flash-success');
-      vibrateSuccess(50);
-      setTimeout(() => flashEl.classList.remove('flash-success'), 300);
-    },
-  });
-  capture.start();
-  addCleanup(() => capture.stop());
-
-  recordingBar.classList.remove('hidden');
+  await waitForVideoReady(video);
+  hintEl.textContent = 'Point the camera at an item and tap the screen to capture it';
   stopBtn.classList.remove('hidden');
 
-  const cancelRecording = async () => {
-    if (!confirmDialog('Discard this recording?')) return;
-    await capture.stop();
+  const frames = [];
+  const startedAt = performance.now();
+  let capturing = false;
+
+  overlay.overlay.addEventListener('click', async (e) => {
+    // Buttons at the bottom keep their own behavior; everything else on the
+    // screen is one big shutter.
+    if (e.target.closest('.camera-controls')) return;
+    if (capturing || !video.videoWidth) return;
+    capturing = true;
+
+    try {
+      const blob = await capturePhotoFromVideo(video);
+      frames.push({
+        blob,
+        time: (performance.now() - startedAt) / 1000,
+        blurScore: 0,
+        blurry: false,
+        deleted: false,
+        label: '',
+      });
+
+      counterEl.textContent = `${frames.length} item${frames.length === 1 ? '' : 's'} captured`;
+      hintEl.textContent = 'Tap again for the next item';
+      flashEl.classList.add('flash-success');
+      playScanSuccess();
+      vibrateSuccess(50);
+      setTimeout(() => flashEl.classList.remove('flash-success'), 300);
+    } catch (err) {
+      showToast(err.message || 'Capture failed — try again');
+    }
+    capturing = false;
+  });
+
+  overlay.cancelBtn.addEventListener('click', () => {
+    if (frames.length && !confirmDialog(`Discard ${frames.length} captured item${frames.length === 1 ? '' : 's'}?`)) {
+      return;
+    }
     runCleanup();
     navigate('bin-detail', { id: binId });
-  };
-
-  overlay.cancelBtn.addEventListener('click', cancelRecording);
+  });
 
   stopBtn.addEventListener('click', async () => {
     stopBtn.disabled = true;
-    recordingBar.classList.add('hidden');
-
-    const frames = await capture.stop();
     stopCamera();
     overlay.remove();
 
     if (!frames.length) {
-      showToast('No usable frames found. Try recording again with steadier hands.');
+      showToast('No items captured');
       runCleanup();
       navigate('bin-detail', { id: binId });
       return;
@@ -450,17 +444,14 @@ async function showReviewGrid(binId, frames) {
   render();
 }
 
-function buildCameraOverlay({ hint, showScanFrame = false, recording = false, captureLabel, doneLabel = 'Done', cancelLabel = 'Cancel' }) {
+function buildCameraOverlay({ hint, showScanFrame = false, counter = false, captureLabel, doneLabel = 'Done', cancelLabel = 'Cancel' }) {
   const overlay = document.createElement('div');
   overlay.className = 'camera-view';
   overlay.innerHTML = `
     <video class="camera-video" playsinline muted autoplay></video>
     <div class="camera-overlay" id="flash-overlay"></div>
     ${showScanFrame ? '<div class="scan-frame"></div>' : ''}
-    <div class="recording-bar hidden" id="recording-bar">
-      <span class="recording-dot"></span>
-      <span class="recording-label">RECORDING</span>
-    </div>
+    ${counter ? '<div class="recording-bar" style="background:rgba(0,0,0,0.45)"><span class="recording-label" style="color:#fff" id="capture-counter">No items captured yet</span></div>' : ''}
     <div class="camera-controls">
       <p class="camera-hint">${escapeHtml(hint)}</p>
       ${captureLabel ? `<button type="button" class="btn btn-primary btn-capture" id="btn-capture">${escapeHtml(captureLabel)}</button>` : ''}
@@ -489,7 +480,7 @@ function buildCameraOverlay({ hint, showScanFrame = false, recording = false, ca
     overlay,
     video,
     flashEl: overlay.querySelector('#flash-overlay'),
-    recordingBar: overlay.querySelector('#recording-bar'),
+    counterEl: overlay.querySelector('#capture-counter'),
     stopBtn: overlay.querySelector('#btn-stop'),
     cancelBtn: overlay.querySelector('#btn-cancel'),
     captureBtn: overlay.querySelector('#btn-capture'),
