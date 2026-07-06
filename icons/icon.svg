@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Source for icon-512/192 and apple-touch-icon PNGs. Full-bleed
+       background with content in the center ~70% so it survives both
+       iOS corner rounding and Android maskable cropping. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40916c"/>
+      <stop offset="1" stop-color="#245741"/>
+    </linearGradient>
+    <linearGradient id="tote" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f7f2"/>
+      <stop offset="1" stop-color="#dcdcd2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- soft shadow under the tote -->
+  <ellipse cx="256" cy="404" rx="150" ry="22" fill="#0c2e20" opacity="0.35"/>
+
+  <!-- tote body: tapered like a plastic storage bin -->
+  <path d="M110 196 L402 196 L376 378 Q373 398 352 398 L160 398 Q139 398 136 378 Z"
+        fill="url(#tote)"/>
+
+  <!-- lid, slightly wider than the body, with handle notches -->
+  <rect x="84" y="134" width="344" height="58" rx="16" fill="#f7f7f2"/>
+  <rect x="84" y="176" width="344" height="16" fill="#c9c9bd"/>
+  <rect x="108" y="152" width="44" height="14" rx="7" fill="#245741" opacity="0.55"/>
+  <rect x="360" y="152" width="44" height="14" rx="7" fill="#245741" opacity="0.55"/>
+
+  <!-- moulded ridges on the body -->
+  <path d="M126 246 L386 246" stroke="#b9b9ac" stroke-width="8" stroke-linecap="round"/>
+  <path d="M133 336 L379 336" stroke="#b9b9ac" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- green QR label on the front -->
+  <rect x="206" y="264" width="100" height="88" rx="12" fill="#2d6a4f"/>
+  <g fill="#f7f7f2">
+    <rect x="222" y="280" width="20" height="20" rx="3"/>
+    <rect x="270" y="280" width="20" height="20" rx="3"/>
+    <rect x="222" y="316" width="20" height="20" rx="3"/>
+    <rect x="248" y="304" width="12" height="12" rx="2"/>
+    <rect x="274" y="320" width="12" height="12" rx="2"/>
+    <rect x="290" y="304" width="8" height="8" rx="2"/>
+  </g>
+</svg>

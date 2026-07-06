@@ -1,4 +1,4 @@
-const CACHE_NAME = 'binbuilder-v6';
+const CACHE_NAME = 'binbuilder-v7';
 const PRECACHE = [
   './',
   'index.html',
@@ -6,6 +6,7 @@ const PRECACHE = [
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/apple-touch-icon.png',
   'js/app.js',
   'js/utils.js',
   'js/db.js',
