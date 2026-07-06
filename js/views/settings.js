@@ -1,6 +1,7 @@
 import { exportBackup, exportJsonOnly, importBackupFile } from '../export-import.js';
 import { showToast } from '../app.js';
 import { confirmDialog } from '../utils.js';
+import { APP_VERSION } from '../version.js';
 
 export function renderSettings(container) {
   container.innerHTML = `
@@ -38,6 +39,7 @@ export function renderSettings(container) {
         <p class="muted" style="margin:0;line-height:1.5">
           BinBuilder stores everything on your device. Camera access requires HTTPS or localhost.
         </p>
+        <p class="muted" style="margin:8px 0 0">Version ${APP_VERSION}</p>
       </div>
     </div>
   `;

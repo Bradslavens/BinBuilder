@@ -8,6 +8,7 @@ const PRECACHE = [
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
   'js/app.js',
+  'js/version.js',
   'js/utils.js',
   'js/db.js',
   'js/audio.js',
