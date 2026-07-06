@@ -36,16 +36,16 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   await expect(page.getByRole('heading', { name: 'Bin saved' })).toBeVisible();
   await page.getByRole('button', { name: '▶ Start Adding Items' }).click();
 
-  // Recording, with a clear Done button and a RECORDING indicator.
-  await expect(page.getByText('RECORDING')).toBeVisible();
-  const done = page.getByRole('button', { name: '✓ Done Adding Items' });
-  await expect(done).toBeVisible();
+  // Tap-to-capture: once the camera is ready the whole screen is a shutter.
+  await expect(page.getByText('tap the screen to capture')).toBeVisible({ timeout: 10_000 });
+  const shutter = page.locator('video.camera-video');
+  await shutter.click();
+  await expect(page.getByText('1 item captured')).toBeVisible();
+  await shutter.click();
+  await expect(page.getByText('2 items captured')).toBeVisible();
+  await page.getByRole('button', { name: '✓ Done Adding Items' }).click();
 
-  // Record for a bit so live capture collects some frames, then finish.
-  await page.waitForTimeout(1500);
-  await done.click();
-
-  // Review grid appears after processing.
+  // Review grid with the two tapped frames.
   const saveItems = page.getByRole('button', { name: 'Save items' });
   await expect(saveItems).toBeVisible({ timeout: 20_000 });
   await saveItems.click();
@@ -64,10 +64,11 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   await expect(page.locator('#main p.muted', { hasText: 'Tent, stove, lantern' })).toBeVisible();
 
   // Second round: "Add more items" must work after a completed session
-  // (regression test for extraction hanging on reuse).
+  // (regression test for the capture flow hanging on reuse).
   await page.getByRole('button', { name: 'Add more items' }).click();
-  await expect(page.getByText('RECORDING')).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(1500);
+  await expect(page.getByText('tap the screen to capture')).toBeVisible({ timeout: 10_000 });
+  await page.locator('video.camera-video').click();
+  await expect(page.getByText('1 item captured')).toBeVisible();
   await page.getByRole('button', { name: '✓ Done Adding Items' }).click();
   const saveMore = page.getByRole('button', { name: 'Save items' });
   await expect(saveMore).toBeVisible({ timeout: 20_000 });
