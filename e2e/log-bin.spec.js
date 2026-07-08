@@ -97,6 +97,16 @@ test('skip recording, then create / edit / delete a text item', async ({ page })
   await page.locator('#item-label').fill('Metric socket set');
   await page.getByRole('button', { name: 'Save label' }).click();
 
+  // Search finds the item by label; Show all items browses back to the bin.
+  // (The bottom nav is hidden on bin detail, so go back to the list first.)
+  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Search' }).click();
+  await page.locator('#search-input').fill('metric');
+  await expect(page.getByText('Metric socket set')).toBeVisible();
+  await page.getByRole('button', { name: 'Show all items' }).click();
+  await page.locator('#all-items-grid .photo-grid-item').first().click();
+  await expect(page.getByRole('button', { name: 'Add more items' })).toBeVisible();
+
   // Delete the item.
   await page.locator('#item-grid .photo-grid-item').first().click();
   await page.getByRole('button', { name: 'Delete item' }).click();

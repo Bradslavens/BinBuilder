@@ -1,4 +1,4 @@
-const CACHE_NAME = 'binbuilder-v11';
+const CACHE_NAME = 'binbuilder-v12';
 const PRECACHE = [
   './',
   'index.html',
@@ -15,6 +15,7 @@ const PRECACHE = [
   'js/camera.js',
   'js/qr-scan.js',
   'js/ocr.js',
+  'js/item-ocr.js',
   'js/thumbnails.js',
   'js/signature.js',
   'js/live-capture.js',

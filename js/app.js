@@ -4,6 +4,7 @@ import { renderBinDetail } from './views/bin-detail.js';
 import { renderSearch } from './views/search.js';
 import { renderSettings } from './views/settings.js';
 import { startLogBin } from './views/log-bin.js';
+import { processPendingItemOcr } from './item-ocr.js';
 
 const main = document.getElementById('main');
 const header = document.getElementById('header');
@@ -125,5 +126,11 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// Extract searchable text from any item photos that haven't been processed
+// yet. Delayed so it never competes with app startup.
+setTimeout(() => {
+  processPendingItemOcr().catch(() => {});
+}, 4000);
 
 navigate('home');

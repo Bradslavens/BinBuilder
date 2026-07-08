@@ -8,6 +8,7 @@ export async function renderSearch(container, { onOpenBin }) {
 
   container.innerHTML = `
     <input type="search" class="search-input" id="search-input" placeholder="Search item labels and bin descriptions" autocomplete="off">
+    <button type="button" class="btn btn-secondary" id="btn-show-all" style="margin-top:12px;width:100%">Show all items</button>
     <div class="search-results" id="search-results">
       <p class="muted">Type to search across all bins.</p>
     </div>
@@ -15,6 +16,54 @@ export async function renderSearch(container, { onOpenBin }) {
 
   const input = container.querySelector('#search-input');
   const results = container.querySelector('#search-results');
+  const showAllBtn = container.querySelector('#btn-show-all');
+
+  function renderAllItems() {
+    if (!items.length) {
+      results.innerHTML = '<p class="muted">No items yet.</p>';
+      return;
+    }
+
+    results.innerHTML = `
+      <p class="muted" style="margin:12px 0 8px">${items.length} item${items.length === 1 ? '' : 's'} — tap one to open its bin</p>
+      <div class="photo-grid" id="all-items-grid"></div>
+    `;
+    const grid = results.querySelector('#all-items-grid');
+
+    // Newest first, same ordering as bin detail.
+    const sorted = [...items].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    for (const item of sorted) {
+      const bin = binMap[item.binId];
+      const cell = document.createElement('div');
+      cell.style.display = 'flex';
+      cell.style.flexDirection = 'column';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'photo-grid-item';
+      if (item.thumbnailBlob) {
+        btn.innerHTML = `<img src="${blobToObjectUrl(item.thumbnailBlob)}" alt="">`;
+      } else {
+        btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.label || 'Text item')}</div>`;
+      }
+      btn.addEventListener('click', () => onOpenBin(item.binId));
+
+      const caption = document.createElement('div');
+      caption.className = 'muted';
+      caption.style.cssText = 'font-size:0.72rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      caption.textContent = item.label || bin?.displayName || '';
+
+      cell.appendChild(btn);
+      cell.appendChild(caption);
+      grid.appendChild(cell);
+    }
+  }
+
+  showAllBtn.addEventListener('click', () => {
+    input.value = '';
+    renderAllItems();
+  });
 
   const runSearch = debounce(() => {
     const q = input.value.trim().toLowerCase();
@@ -29,7 +78,12 @@ export async function renderSearch(container, { onOpenBin }) {
       || (b.id || '').toLowerCase().includes(q),
     );
 
-    const matchedItems = items.filter((i) => (i.label || '').toLowerCase().includes(q));
+    // Labels are typed by the user; ocrText is printed text read off the item
+    // photo in the background (brands, model numbers).
+    const matchedItems = items.filter((i) =>
+      (i.label || '').toLowerCase().includes(q)
+      || (i.ocrText || '').toLowerCase().includes(q),
+    );
 
     if (!matchedBins.length && !matchedItems.length) {
       results.innerHTML = '<p class="muted">No results.</p>';
@@ -44,11 +98,12 @@ export async function renderSearch(container, { onOpenBin }) {
       btn.type = 'button';
       btn.className = 'search-result';
       const thumb = item.thumbnailBlob ? blobToObjectUrl(item.thumbnailBlob) : null;
+      const labelMatched = (item.label || '').toLowerCase().includes(q);
       btn.innerHTML = `
         ${thumb ? `<img src="${thumb}" alt="">` : '<div style="width:56px;height:56px;background:var(--surface2);border-radius:8px"></div>'}
         <div>
           <div style="font-weight:700">${escapeHtml(item.label || '(no label)')}</div>
-          <div class="muted" style="font-size:0.85rem">${escapeHtml(bin?.displayName || item.binId)}</div>
+          <div class="muted" style="font-size:0.85rem">${escapeHtml(bin?.displayName || item.binId)}${labelMatched ? '' : ' · matched text on photo'}</div>
         </div>
       `;
       btn.addEventListener('click', () => onOpenBin(item.binId));

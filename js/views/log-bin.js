@@ -3,6 +3,7 @@ import { createBinFromQr, createBinFromPhoto, addItemsToBin } from '../db.js';
 import { startCamera, stopCamera, capturePhotoFromVideo } from '../camera.js';
 import { startQrScanLoop } from '../qr-scan.js';
 import { recognizeTextFromBlob } from '../ocr.js';
+import { processPendingItemOcr } from '../item-ocr.js';
 import { createThumbnail, resizeImageBlob } from '../thumbnails.js';
 import { playScanSuccess, playSaveSuccess, vibrateSuccess } from '../audio.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml, wait } from '../utils.js';
@@ -424,6 +425,10 @@ async function showReviewGrid(binId, frames) {
       await addItemsToBin(binId, itemData);
       playSaveSuccess();
       vibrateSuccess([100, 50, 100]);
+
+      // Pull any printed text (brands, model numbers) off the new photos in
+      // the background so it becomes searchable.
+      processPendingItemOcr().catch(() => {});
 
       overlay.remove();
       runCleanup();

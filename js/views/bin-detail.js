@@ -159,6 +159,11 @@ function openItemModal(container, item, binId, onChange) {
   const modal = container.querySelector('#item-modal');
   const imgUrl = item.imageBlob ? blobToObjectUrl(item.imageBlob) : null;
 
+  const addedOn = item.createdAt
+    ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : '';
+  const ocrSnippet = (item.ocrText || '').slice(0, 120);
+
   modal.classList.remove('hidden');
   modal.innerHTML = `
     ${imgUrl ? `<img src="${imgUrl}" alt="">` : '<p class="muted">Text-only item</p>'}
@@ -166,6 +171,8 @@ function openItemModal(container, item, binId, onChange) {
       <label for="item-label">Label</label>
       <input type="text" class="text-input" id="item-label" value="${escapeHtml(item.label || '')}">
     </div>
+    ${addedOn ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">Added ${escapeHtml(addedOn)}</p>` : ''}
+    ${ocrSnippet ? `<p class="muted" style="margin:4px 0 0;font-size:0.85rem">Text on photo: ${escapeHtml(ocrSnippet)}${item.ocrText.length > 120 ? '…' : ''}</p>` : ''}
     <div class="modal-actions">
       <button type="button" class="btn btn-primary" id="btn-save-label">Save label</button>
       <button type="button" class="btn btn-danger" id="btn-delete-item">Delete item</button>

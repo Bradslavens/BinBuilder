@@ -12,6 +12,11 @@ export async function initOcr(onProgress) {
         }
       },
     });
+    // A failed init (offline before language data was cached) must not stick
+    // as a permanently rejected promise — allow a retry on the next call.
+    workerPromise.catch(() => {
+      workerPromise = null;
+    });
   }
   return workerPromise;
 }
