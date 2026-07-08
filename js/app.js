@@ -5,6 +5,7 @@ import { renderSearch } from './views/search.js';
 import { renderSettings } from './views/settings.js';
 import { startLogBin } from './views/log-bin.js';
 import { processPendingItemOcr } from './item-ocr.js';
+import { processPendingItemAi } from './item-ai.js';
 
 const main = document.getElementById('main');
 const header = document.getElementById('header');
@@ -71,7 +72,10 @@ export function navigate(route, params = {}) {
     case 'home':
       setHeader(null);
       setNavVisible(true, 'home');
-      renderHome(main, { onLogBin: () => startLogBin() });
+      renderHome(main, {
+        onLogBin: () => startLogBin(),
+        onOpenSettings: () => navigate('settings'),
+      });
       break;
 
     case 'bins':
@@ -127,9 +131,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Extract searchable text from any item photos that haven't been processed
-// yet. Delayed so it never competes with app startup.
+// Extract searchable text and AI names from any item photos that haven't
+// been processed yet. Delayed so it never competes with app startup.
 setTimeout(() => {
+  processPendingItemAi().catch(() => {});
   processPendingItemOcr().catch(() => {});
 }, 4000);
 

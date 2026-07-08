@@ -172,6 +172,7 @@ function openItemModal(container, item, binId, onChange) {
       <input type="text" class="text-input" id="item-label" value="${escapeHtml(item.label || '')}">
     </div>
     ${addedOn ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">Added ${escapeHtml(addedOn)}</p>` : ''}
+    ${item.aiLabel ? `<p class="muted" style="margin:4px 0 0;font-size:0.85rem">AI: ${escapeHtml(item.aiLabel)}</p>` : ''}
     ${ocrSnippet ? `<p class="muted" style="margin:4px 0 0;font-size:0.85rem">Text on photo: ${escapeHtml(ocrSnippet)}${item.ocrText.length > 120 ? '…' : ''}</p>` : ''}
     <div class="modal-actions">
       <button type="button" class="btn btn-primary" id="btn-save-label">Save label</button>

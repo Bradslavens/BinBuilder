@@ -77,3 +77,12 @@ export function canvasToJpegBlob(canvas, quality = 0.85) {
 export function fileToArrayBuffer(file) {
   return file.arrayBuffer();
 }
+
+export function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}

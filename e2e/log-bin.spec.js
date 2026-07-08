@@ -37,7 +37,7 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   await page.getByRole('button', { name: '▶ Start Adding Items' }).click();
 
   // Tap-to-capture: once the camera is ready the whole screen is a shutter.
-  await expect(page.getByText('tap the screen to capture')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.camera-hint')).toContainText('tap the screen to capture', { timeout: 10_000 });
   const shutter = page.locator('video.camera-video');
   await shutter.click();
   await expect(page.getByText('1 item captured')).toBeVisible();
@@ -66,7 +66,7 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   // Second round: "Add more items" must work after a completed session
   // (regression test for the capture flow hanging on reuse).
   await page.getByRole('button', { name: 'Add more items' }).click();
-  await expect(page.getByText('tap the screen to capture')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.camera-hint')).toContainText('tap the screen to capture', { timeout: 10_000 });
   await page.locator('video.camera-video').click();
   await expect(page.getByText('1 item captured')).toBeVisible();
   await page.getByRole('button', { name: '✓ Done Adding Items' }).click();

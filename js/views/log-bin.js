@@ -4,6 +4,7 @@ import { startCamera, stopCamera, capturePhotoFromVideo } from '../camera.js';
 import { startQrScanLoop } from '../qr-scan.js';
 import { recognizeTextFromBlob } from '../ocr.js';
 import { processPendingItemOcr } from '../item-ocr.js';
+import { processPendingItemAi } from '../item-ai.js';
 import { createThumbnail, resizeImageBlob } from '../thumbnails.js';
 import { playScanSuccess, playSaveSuccess, vibrateSuccess } from '../audio.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml, wait } from '../utils.js';
@@ -426,8 +427,9 @@ async function showReviewGrid(binId, frames) {
       playSaveSuccess();
       vibrateSuccess([100, 50, 100]);
 
-      // Pull any printed text (brands, model numbers) off the new photos in
-      // the background so it becomes searchable.
+      // Pull AI names and any printed text off the new photos in the
+      // background so they become searchable.
+      processPendingItemAi().catch(() => {});
       processPendingItemOcr().catch(() => {});
 
       overlay.remove();

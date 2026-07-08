@@ -17,12 +17,7 @@ export async function processPendingItemOcr() {
       (item) => item.imageBlob && item.ocrText === undefined
     );
 
-    for (const { id } of pending) {
-      // Re-read right before writing so a label edit made while OCR was
-      // running isn't clobbered by the stale copy.
-      const item = await getItem(id);
-      if (!item || !item.imageBlob || item.ocrText !== undefined) continue;
-
+    for (const item of pending) {
       let text;
       try {
         text = await recognizeTextFromBlob(item.imageBlob);
@@ -32,8 +27,13 @@ export async function processPendingItemOcr() {
         return;
       }
 
-      item.ocrText = text;
-      await putItem(item);
+      // Re-read after the slow OCR and set only our own field: the AI-naming
+      // pass and label edits run concurrently, and writing back the copy from
+      // before the OCR started would wipe whatever they saved meanwhile.
+      const fresh = await getItem(item.id);
+      if (!fresh || fresh.ocrText !== undefined) continue;
+      fresh.ocrText = text;
+      await putItem(fresh);
     }
   } finally {
     running = false;

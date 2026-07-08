@@ -52,7 +52,7 @@ export async function renderSearch(container, { onOpenBin }) {
       const caption = document.createElement('div');
       caption.className = 'muted';
       caption.style.cssText = 'font-size:0.72rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      caption.textContent = item.label || bin?.displayName || '';
+      caption.textContent = item.label || item.aiLabel || bin?.displayName || '';
 
       cell.appendChild(btn);
       cell.appendChild(caption);
@@ -78,10 +78,11 @@ export async function renderSearch(container, { onOpenBin }) {
       || (b.id || '').toLowerCase().includes(q),
     );
 
-    // Labels are typed by the user; ocrText is printed text read off the item
-    // photo in the background (brands, model numbers).
+    // Labels are typed by the user; aiLabel is the AI-generated object name;
+    // ocrText is printed text read off the item photo (brands, model numbers).
     const matchedItems = items.filter((i) =>
       (i.label || '').toLowerCase().includes(q)
+      || (i.aiLabel || '').toLowerCase().includes(q)
       || (i.ocrText || '').toLowerCase().includes(q),
     );
 
@@ -99,11 +100,13 @@ export async function renderSearch(container, { onOpenBin }) {
       btn.className = 'search-result';
       const thumb = item.thumbnailBlob ? blobToObjectUrl(item.thumbnailBlob) : null;
       const labelMatched = (item.label || '').toLowerCase().includes(q);
+      const aiMatched = (item.aiLabel || '').toLowerCase().includes(q);
+      const matchNote = labelMatched ? '' : aiMatched ? ' · AI name' : ' · matched text on photo';
       btn.innerHTML = `
         ${thumb ? `<img src="${thumb}" alt="">` : '<div style="width:56px;height:56px;background:var(--surface2);border-radius:8px"></div>'}
         <div>
-          <div style="font-weight:700">${escapeHtml(item.label || '(no label)')}</div>
-          <div class="muted" style="font-size:0.85rem">${escapeHtml(bin?.displayName || item.binId)}${labelMatched ? '' : ' · matched text on photo'}</div>
+          <div style="font-weight:700">${escapeHtml(item.label || item.aiLabel || '(no label)')}</div>
+          <div class="muted" style="font-size:0.85rem">${escapeHtml(bin?.displayName || item.binId)}${matchNote}</div>
         </div>
       `;
       btn.addEventListener('click', () => onOpenBin(item.binId));
