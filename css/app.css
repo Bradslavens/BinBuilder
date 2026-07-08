@@ -439,12 +439,18 @@ body {
   flex-direction: column;
   padding: 16px;
   padding-bottom: calc(16px + var(--safe-bottom));
+  /* Content taller than the screen (photo + fields + buttons, or the
+     on-screen keyboard eating half the viewport) must scroll, never push
+     the action buttons out of reach. */
+  overflow-y: auto;
 }
 
 .modal img {
-  flex: 1;
+  flex: 0 0 auto;
+  width: 100%;
   object-fit: contain;
-  max-height: 70vh;
+  /* Shrink the photo so the label field and buttons fit on screen. */
+  max-height: 40vh;
 }
 
 .modal-actions {
