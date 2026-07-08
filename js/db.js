@@ -33,8 +33,23 @@ export async function getAllBins() {
   return bins.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+// Re-slicing a Blob that was itself just read out of IndexedDB produces a
+// fresh Blob instance backed by the same bytes. Without this, writing back a
+// record whose photo Blob came from a previous get() (e.g. saving a label
+// edit) can leave that Blob unreadable after the next reload on some
+// browsers (a known IndexedDB/Blob storage bug), turning the photo into a
+// broken-image placeholder.
+function reslicedBlob(blob) {
+  return blob instanceof Blob ? blob.slice(0, blob.size, blob.type) : blob;
+}
+
 export async function putBin(bin) {
-  return (await getDb()).put('bins', bin);
+  const safe = {
+    ...bin,
+    binPhotoBlob: reslicedBlob(bin.binPhotoBlob),
+    binPhotoThumbnail: reslicedBlob(bin.binPhotoThumbnail),
+  };
+  return (await getDb()).put('bins', safe);
 }
 
 export async function deleteBin(id) {
@@ -102,7 +117,12 @@ export async function getItem(id) {
 }
 
 export async function putItem(item) {
-  return (await getDb()).put('items', item);
+  const safe = {
+    ...item,
+    imageBlob: reslicedBlob(item.imageBlob),
+    thumbnailBlob: reslicedBlob(item.thumbnailBlob),
+  };
+  return (await getDb()).put('items', safe);
 }
 
 export async function deleteItem(id) {

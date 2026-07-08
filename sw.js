@@ -1,4 +1,4 @@
-const CACHE_NAME = 'binbuilder-v14';
+const CACHE_NAME = 'binbuilder-v15';
 const PRECACHE = [
   './',
   'index.html',
