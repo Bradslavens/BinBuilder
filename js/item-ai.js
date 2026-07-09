@@ -4,15 +4,17 @@ import { blobToDataUrl } from './utils.js';
 import { getAiKey, getAiModel } from './ai-settings.js';
 
 // Background pass that asks an AI model (via the user's own OpenRouter key)
-// to name each item photo — "TV remote", "paperback book" — into a
-// searchable `aiLabel` field. Mirrors item-ocr.js: `aiLabel === undefined`
-// marks an item as not yet processed, so interrupted runs resume later.
-// The user's typed `label` is never touched.
+// to describe each item photo into a searchable `aiLabel` field.
+// `aiLabel === undefined` marks an item as not yet processed, so interrupted
+// runs resume later.
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MAX_DESCRIPTION_CHARS = 250;
 const PROMPT =
-  'Name the main object in this photo in 2-4 words, like "TV remote" or ' +
-  '"paperback book". Reply with only the name.';
+  'Describe the main item in this photo for a search index, in at most ' +
+  '250 characters. Mention the object, its colors, size, any visible text ' +
+  'or brand names, pictures or logos, and any other detail that would help ' +
+  'someone find it later. Reply with only the description, no preamble.';
 
 let running = false;
 let lastError = '';
@@ -27,8 +29,8 @@ export function cleanAiLabel(text) {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^["'`]+/, '')
-    .replace(/["'`.]+$/, '')
-    .slice(0, 60)
+    .replace(/["'`]+$/, '')
+    .slice(0, MAX_DESCRIPTION_CHARS)
     .trim();
 }
 
@@ -66,13 +68,13 @@ async function callOpenRouter(key, body) {
 
 export async function requestItemLabel(imageBlob, key = getAiKey(), model = getAiModel()) {
   // Downscale before upload: smaller, cheaper, faster, and plenty for
-  // recognizing an object.
+  // recognizing an object and reading any large text on it.
   const small = await resizeImageBlob(imageBlob, 512, 0.8);
   const dataUrl = await blobToDataUrl(small);
 
   const data = await callOpenRouter(key, {
     model,
-    max_tokens: 30,
+    max_tokens: 120,
     messages: [
       {
         role: 'user',
@@ -123,9 +125,9 @@ export async function processPendingItemAi() {
         return;
       }
 
-      // Re-read after the slow request and set only our own field: the OCR
-      // pass and label edits run concurrently, and writing back the copy from
-      // before the request started would wipe whatever they saved meanwhile.
+      // Re-read after the slow request and set only our own field, so a
+      // concurrent edit (like a deletion) isn't clobbered by writing back the
+      // stale copy we captured before the request started.
       const fresh = await getItem(item.id);
       if (!fresh || fresh.aiLabel !== undefined) continue;
       fresh.aiLabel = label;

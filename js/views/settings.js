@@ -14,10 +14,10 @@ export function renderSettings(container) {
   container.innerHTML = `
     <div class="stack">
       <div class="card">
-        <p class="card-title">AI item naming</p>
+        <p class="card-title">AI item descriptions</p>
         <p class="muted" style="margin:0 0 12px;line-height:1.5">
-          Automatically names each item photo (like &ldquo;TV remote&rdquo;) so search can find it.
-          Uses your own OpenRouter account &mdash; item photos are sent to the AI provider when naming runs.
+          Automatically describes each item photo &mdash; object, colors, size, any text or logos &mdash; so search can find it.
+          Uses your own OpenRouter account &mdash; item photos are sent to the AI provider when this runs.
         </p>
         ${savedKey ? `
           <p class="muted" style="margin:0 0 8px">Key saved (&hellip;${escapeHtml(savedKey.slice(-4))})</p>
@@ -49,7 +49,7 @@ export function renderSettings(container) {
             <li>Copy the key (starts with <code>sk-or-</code>) and paste it above.</li>
           </ol>
           <p class="muted" style="margin:8px 0 0;font-size:0.85rem">
-            Naming costs roughly a tenth of a cent per photo with the default model &mdash; about $1 per 1,000 items.
+            Describing costs well under a cent per photo with the default model &mdash; a few dollars per 1,000 items.
             The key is stored only on this device and is never included in backups.
           </p>
         </details>
@@ -106,7 +106,7 @@ export function renderSettings(container) {
     const withPhotos = items.filter((i) => i.imageBlob);
     const named = withPhotos.filter((i) => i.aiLabel !== undefined);
     const err = getLastAiError();
-    statusEl.textContent = `${named.length} of ${withPhotos.length} photo items named.`
+    statusEl.textContent = `${named.length} of ${withPhotos.length} photo items described.`
       + (err ? ` Last error: ${err}` : '');
   }
   updateAiStatus();
@@ -119,7 +119,7 @@ export function renderSettings(container) {
     }
     setAiKey(key);
     setAiModel(container.querySelector('#ai-model').value);
-    showToast('AI naming enabled — naming items in the background');
+    showToast('AI descriptions enabled — describing items in the background');
     processPendingItemAi().catch(() => {});
     rerender();
   });

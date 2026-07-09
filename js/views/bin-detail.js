@@ -1,5 +1,5 @@
 import {
-  getBin, getItemsForBin, putItem, deleteItem, deleteBin, addTextItemToBin, updateBin,
+  getBin, getItemsForBin, deleteItem, deleteBin, updateBin,
 } from '../db.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml } from '../utils.js';
 import { showToast } from '../app.js';
@@ -42,11 +42,6 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
         <button type="button" class="btn btn-secondary" id="btn-cancel-edit">Cancel</button>
       </div>
       <button type="button" class="btn btn-primary" id="btn-log-more">Add more items</button>
-      <button type="button" class="btn btn-secondary" id="btn-quick-add">Quick add (text only)</button>
-      <div id="quick-add-form" class="hidden stack">
-        <input type="text" class="text-input" id="quick-add-input" placeholder="Item description">
-        <button type="button" class="btn btn-primary" id="btn-save-quick">Save text item</button>
-      </div>
       <p class="muted" style="margin:0" id="item-count">${items.length} item${items.length === 1 ? '' : 's'}</p>
       <div class="photo-grid" id="item-grid"></div>
       <button type="button" class="btn btn-danger" id="btn-delete-bin">Delete bin</button>
@@ -66,7 +61,7 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
       if (item.thumbnailBlob) {
         btn.innerHTML = `<img src="${blobToObjectUrl(item.thumbnailBlob)}" alt="">`;
       } else {
-        btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.label || 'Text item')}</div>`;
+        btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.aiLabel || 'Item')}</div>`;
       }
       btn.addEventListener('click', () => openItemModal(container, item, binId, () => refreshGrid(grid, binId)));
       grid.appendChild(btn);
@@ -100,25 +95,6 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
     renderBinDetail(container, binId, { onBack, onLogMore });
   });
 
-  const quickForm = container.querySelector('#quick-add-form');
-  container.querySelector('#btn-quick-add').addEventListener('click', () => {
-    quickForm.classList.toggle('hidden');
-    container.querySelector('#quick-add-input').focus();
-  });
-
-  container.querySelector('#btn-save-quick').addEventListener('click', async () => {
-    const label = container.querySelector('#quick-add-input').value;
-    if (!label.trim()) {
-      showToast('Enter a description');
-      return;
-    }
-    await addTextItemToBin(binId, label);
-    container.querySelector('#quick-add-input').value = '';
-    quickForm.classList.add('hidden');
-    showToast('Text item added');
-    await refreshGrid(grid, binId);
-  });
-
   container.querySelector('#btn-delete-bin').addEventListener('click', async () => {
     if (!confirmDialog('Delete this bin and all its items?')) return;
     await deleteBin(binId);
@@ -145,7 +121,7 @@ async function refreshGrid(grid, binId) {
     if (item.thumbnailBlob) {
       btn.innerHTML = `<img src="${blobToObjectUrl(item.thumbnailBlob)}" alt="">`;
     } else {
-      btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.label || 'Text item')}</div>`;
+      btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.aiLabel || 'Item')}</div>`;
     }
     btn.addEventListener('click', () => {
       const modal = document.getElementById('item-modal');
@@ -162,20 +138,24 @@ function openItemModal(container, item, binId, onChange) {
   const addedOn = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '';
-  const ocrSnippet = (item.ocrText || '').slice(0, 120);
+
+  // aiLabel is the AI-generated description. `undefined` means it hasn't been
+  // processed yet (or AI is off); '' means it ran but found nothing to say.
+  let description;
+  if (item.aiLabel) {
+    description = `<p style="margin:12px 0 0;line-height:1.5">${escapeHtml(item.aiLabel)}</p>`;
+  } else if (item.aiLabel === undefined) {
+    description = '<p class="muted" style="margin:12px 0 0">Description pending — turn on AI in More to describe items.</p>';
+  } else {
+    description = '<p class="muted" style="margin:12px 0 0">No description.</p>';
+  }
 
   modal.classList.remove('hidden');
   modal.innerHTML = `
-    ${imgUrl ? `<img src="${imgUrl}" alt="">` : '<p class="muted">Text-only item</p>'}
-    <div class="label-field">
-      <label for="item-label">Label</label>
-      <input type="text" class="text-input" id="item-label" value="${escapeHtml(item.label || '')}">
-    </div>
+    ${imgUrl ? `<img src="${imgUrl}" alt="">` : '<p class="muted">No photo</p>'}
+    ${description}
     ${addedOn ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">Added ${escapeHtml(addedOn)}</p>` : ''}
-    ${item.aiLabel ? `<p class="muted" style="margin:4px 0 0;font-size:0.85rem">AI: ${escapeHtml(item.aiLabel)}</p>` : ''}
-    ${ocrSnippet ? `<p class="muted" style="margin:4px 0 0;font-size:0.85rem">Text on photo: ${escapeHtml(ocrSnippet)}${item.ocrText.length > 120 ? '…' : ''}</p>` : ''}
     <div class="modal-actions">
-      <button type="button" class="btn btn-primary" id="btn-save-label">Save label</button>
       <button type="button" class="btn btn-danger" id="btn-delete-item">Delete item</button>
       <button type="button" class="btn btn-secondary" id="btn-close-modal">Close</button>
     </div>
@@ -184,13 +164,6 @@ function openItemModal(container, item, binId, onChange) {
   const close = () => modal.classList.add('hidden');
 
   modal.querySelector('#btn-close-modal').addEventListener('click', close);
-  modal.querySelector('#btn-save-label').addEventListener('click', async () => {
-    item.label = modal.querySelector('#item-label').value;
-    await putItem(item);
-    showToast('Label saved');
-    close();
-    onChange();
-  });
   modal.querySelector('#btn-delete-item').addEventListener('click', async () => {
     if (!confirmDialog('Delete this item?')) return;
     await deleteItem(item.id);

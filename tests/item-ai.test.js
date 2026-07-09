@@ -2,16 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { cleanAiLabel, labelFromResponse } from '../js/item-ai.js';
 
 describe('cleanAiLabel', () => {
-  it('strips wrapping quotes and trailing period', () => {
-    expect(cleanAiLabel('"TV remote."')).toBe('TV remote');
+  it('strips wrapping quotes but keeps sentence punctuation', () => {
+    expect(cleanAiLabel('"A black TV remote with grey buttons."')).toBe('A black TV remote with grey buttons.');
   });
 
   it('collapses whitespace', () => {
     expect(cleanAiLabel('  paperback\n  book ')).toBe('paperback book');
   });
 
-  it('caps runaway responses at 60 characters', () => {
-    expect(cleanAiLabel('x'.repeat(200)).length).toBeLessThanOrEqual(60);
+  it('caps runaway responses at 250 characters', () => {
+    expect(cleanAiLabel('x'.repeat(600)).length).toBeLessThanOrEqual(250);
   });
 
   it('returns empty string for empty or missing input', () => {

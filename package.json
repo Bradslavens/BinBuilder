@@ -14,8 +14,7 @@
   "dependencies": {
     "idb": "^8.0.3",
     "jsqr": "^1.4.0",
-    "jszip": "^3.10.1",
-    "tesseract.js": "^7.0.0"
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

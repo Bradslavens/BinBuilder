@@ -4,7 +4,6 @@ import {
   createBinFromPhoto,
   getAllBins,
   getBin,
-  addTextItemToBin,
   addItemsToBin,
   getItemsForBin,
   getItemCountForBin,
@@ -53,17 +52,15 @@ describe('bins', () => {
 });
 
 describe('items', () => {
-  it('adds a text-only item to a bin and counts it', async () => {
+  it('adds an image item to a bin and counts it', async () => {
     const bin = await createBinFromQr('BIN-A');
-    const item = await addTextItemToBin(bin.id, '  socket wrench  ');
-    expect(item.label).toBe('socket wrench');
-    expect(item.isTextOnly).toBe(true);
+    await addItemsToBin(bin.id, [{ imageBlob: 'img', thumbnailBlob: 'thumb' }]);
     expect(await getItemCountForBin(bin.id)).toBe(1);
   });
 
   it('adds multiple image items and returns them newest-first', async () => {
     const bin = await createBinFromQr('BIN-B');
-    await addItemsToBin(bin.id, [{ label: 'one' }, { label: 'two' }]);
+    await addItemsToBin(bin.id, [{ imageBlob: 'one' }, { imageBlob: 'two' }]);
     const items = await getItemsForBin(bin.id);
     expect(items.length).toBe(2);
     expect(items.every((i) => i.binId === bin.id)).toBe(true);
@@ -71,7 +68,7 @@ describe('items', () => {
 
   it('cascades deletion of a bin to its items', async () => {
     const bin = await createBinFromQr('BIN-C');
-    await addTextItemToBin(bin.id, 'thing');
+    await addItemsToBin(bin.id, [{ imageBlob: 'thing' }]);
     await deleteBin(bin.id);
     expect(await getBin(bin.id)).toBeUndefined();
     expect(await getItemCountForBin(bin.id)).toBe(0);

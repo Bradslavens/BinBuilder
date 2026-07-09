@@ -76,39 +76,34 @@ test('photo → confirm → record items → save → edit bin', async ({ page }
   await expect(page.getByRole('button', { name: 'Add more items' })).toBeVisible();
 });
 
-test('skip recording, then create / edit / delete a text item', async ({ page }) => {
+test('capture an item, browse it in search (no AI), then delete item + bin', async ({ page }) => {
   await page.getByRole('button', { name: 'Log a bin' }).click();
   await page.getByRole('button', { name: '📷 Photo of bin' }).click();
   await page.getByRole('button', { name: '📷 Take Photo' }).click();
   await page.getByRole('button', { name: '✓ Use This Photo' }).click();
 
-  // Skip the recording step — go straight to the (empty) bin.
-  await page.getByRole('button', { name: 'Skip for now' }).click();
-  await expect(page.getByText('No items yet.')).toBeVisible();
-
-  // Create a text-only item.
-  await page.getByRole('button', { name: 'Quick add (text only)' }).click();
-  await page.locator('#quick-add-input').fill('Socket wrench set');
-  await page.getByRole('button', { name: 'Save text item' }).click();
+  // Capture one item.
+  await page.getByRole('button', { name: '▶ Start Adding Items' }).click();
+  await expect(page.locator('.camera-hint')).toContainText('tap the screen to capture', { timeout: 10_000 });
+  await page.locator('video.camera-video').click();
+  await expect(page.getByText('1 item captured')).toBeVisible();
+  await page.getByRole('button', { name: '✓ Done Adding Items' }).click();
+  const saveItems = page.getByRole('button', { name: 'Save items' });
+  await expect(saveItems).toBeVisible({ timeout: 20_000 });
+  await saveItems.click();
   await expect(page.getByText('1 item')).toBeVisible();
 
-  // Read/Update: open the item and rename its label.
-  await page.locator('#item-grid .photo-grid-item').first().click();
-  await page.locator('#item-label').fill('Metric socket set');
-  await page.getByRole('button', { name: 'Save label' }).click();
-
-  // Search finds the item by label; Show all items browses back to the bin.
-  // (The bottom nav is hidden on bin detail, so go back to the list first.)
+  // With no AI key, Search just browses every item photo by date — tapping one
+  // opens its bin. (Bottom nav is hidden on bin detail, so go back first.)
   await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Search' }).click();
-  await page.locator('#search-input').fill('metric');
-  await expect(page.getByText('Metric socket set')).toBeVisible();
-  await page.getByRole('button', { name: 'Show all items' }).click();
+  await expect(page.getByText('browse your items by date')).toBeVisible();
   await page.locator('#all-items-grid .photo-grid-item').first().click();
   await expect(page.getByRole('button', { name: 'Add more items' })).toBeVisible();
 
-  // Delete the item.
+  // Open the item — with AI off it shows a description-pending note — then delete it.
   await page.locator('#item-grid .photo-grid-item').first().click();
+  await expect(page.getByText('Description pending')).toBeVisible();
   await page.getByRole('button', { name: 'Delete item' }).click();
   await expect(page.getByText('No items yet.')).toBeVisible();
 

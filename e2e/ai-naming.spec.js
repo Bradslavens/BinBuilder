@@ -2,13 +2,13 @@ import { test, expect } from '@playwright/test';
 import { setupPage } from './helpers.js';
 
 // The OpenRouter API is mocked, so this exercises everything on our side:
-// key setup in More, background naming after saving an item, and search
-// finding the item by its AI name.
+// key setup in More, background describing after saving an item, and search
+// finding the item by its AI description.
 test.beforeEach(async ({ page }) => {
   await setupPage(page);
   page.on('dialog', (dialog) => dialog.accept());
   await page.route('https://openrouter.ai/**', (route) =>
-    route.fulfill({ json: { choices: [{ message: { content: 'TV remote' } }] } }),
+    route.fulfill({ json: { choices: [{ message: { content: 'Black TV remote with grey buttons' } }] } }),
   );
   await page.goto('/');
   await page.evaluate(async () => {
@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('key in More → item auto-named → searchable as "remote"', async ({ page }) => {
+test('key in More → item auto-described → searchable as "remote"', async ({ page }) => {
   // The home banner nudges toward setup and opens More.
   await page.getByText('Maximize your experience').click();
 
@@ -62,11 +62,10 @@ test('key in More → item auto-named → searchable as "remote"', async ({ page
         };
       };
     })), { timeout: 15_000 })
-    .toContain('TV remote');
+    .toContain('Black TV remote with grey buttons');
 
   await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Search' }).click();
   await page.locator('#search-input').fill('remote');
-  await expect(page.getByText('TV remote')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('AI name')).toBeVisible();
+  await expect(page.getByText('Black TV remote with grey buttons')).toBeVisible({ timeout: 15_000 });
 });

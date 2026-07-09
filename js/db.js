@@ -139,7 +139,6 @@ export async function addItemsToBin(binId, itemDataList) {
       binId,
       imageBlob: data.imageBlob,
       thumbnailBlob: data.thumbnailBlob,
-      label: data.label || '',
       createdAt: new Date().toISOString(),
     };
     await tx.store.put(item);
@@ -147,20 +146,6 @@ export async function addItemsToBin(binId, itemDataList) {
   }
   await tx.done;
   return created;
-}
-
-export async function addTextItemToBin(binId, label) {
-  const item = {
-    id: uuid(),
-    binId,
-    imageBlob: null,
-    thumbnailBlob: null,
-    label: label.trim(),
-    createdAt: new Date().toISOString(),
-    isTextOnly: true,
-  };
-  await putItem(item);
-  return item;
 }
 
 export async function getItemCountForBin(binId) {

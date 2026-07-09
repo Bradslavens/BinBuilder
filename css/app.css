@@ -304,17 +304,6 @@ body {
   border-radius: 4px;
 }
 
-.frame-label-input {
-  width: 100%;
-  margin-top: 4px;
-  padding: 8px;
-  border: 1px solid #444;
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.9rem;
-}
-
 .camera-view {
   position: fixed;
   inset: 0;
@@ -560,6 +549,39 @@ body {
 @keyframes slideUp {
   from { transform: translateY(12px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+.update-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--warning);
+  color: #1a1a1a;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  animation: slideDown 0.2s ease;
+}
+
+.update-banner button {
+  background: #1a1a1a;
+  color: var(--warning);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
 }
 
 .alert {

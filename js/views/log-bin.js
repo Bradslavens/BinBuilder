@@ -2,8 +2,6 @@ import { hideChrome, navigate, showToast } from '../app.js';
 import { createBinFromQr, createBinFromPhoto, addItemsToBin } from '../db.js';
 import { startCamera, stopCamera, capturePhotoFromVideo } from '../camera.js';
 import { startQrScanLoop } from '../qr-scan.js';
-import { recognizeTextFromBlob } from '../ocr.js';
-import { processPendingItemOcr } from '../item-ocr.js';
 import { processPendingItemAi } from '../item-ai.js';
 import { createThumbnail, resizeImageBlob } from '../thumbnails.js';
 import { playScanSuccess, playSaveSuccess, vibrateSuccess } from '../audio.js';
@@ -163,8 +161,7 @@ async function waitForVideoReady(video, timeoutMs = 5000) {
   }
 }
 
-// Step 2: confirm the single still photo. OCR runs in the background and
-// pre-fills the description without ever blocking the confirm button.
+// Step 2: confirm the single still photo and name the bin.
 async function showPhotoConfirm(photoBlob) {
   const resized = await resizeImageBlob(photoBlob, 1280);
   const previewUrl = blobToObjectUrl(resized);
@@ -179,7 +176,6 @@ async function showPhotoConfirm(photoBlob) {
       <div class="label-field">
         <label for="bin-description">Description (optional)</label>
         <textarea class="text-area" id="bin-description" placeholder="Name this bin, or leave blank"></textarea>
-        <div id="ocr-status" class="muted" style="margin-top:4px;font-size:0.85rem">Reading any text…</div>
       </div>
       <button type="button" class="btn btn-primary" id="btn-use-photo">✓ Use This Photo</button>
       <button type="button" class="btn btn-secondary" id="btn-retake" style="margin-top:8px">↺ Retake Photo</button>
@@ -193,20 +189,8 @@ async function showPhotoConfirm(photoBlob) {
     overlay.remove();
   });
 
-  const statusEl = overlay.querySelector('#ocr-status');
   const descEl = overlay.querySelector('#bin-description');
   const useBtn = overlay.querySelector('#btn-use-photo');
-
-  // Non-blocking OCR: the user can proceed immediately; if text is found and
-  // they haven't typed anything, we fill it in.
-  recognizeTextFromBlob(resized, (msg) => { statusEl.textContent = msg; })
-    .then((text) => {
-      if (text && !descEl.value.trim()) descEl.value = text;
-      statusEl.textContent = text ? 'Detected text added — edit if needed' : 'No text detected';
-    })
-    .catch(() => {
-      statusEl.textContent = 'Text recognition unavailable — type a description if you like';
-    });
 
   useBtn.addEventListener('click', async () => {
     useBtn.disabled = true;
@@ -313,7 +297,6 @@ async function startItemCapture(binId) {
         blurScore: 0,
         blurry: false,
         deleted: false,
-        label: '',
       });
 
       counterEl.textContent = `${frames.length} item${frames.length === 1 ? '' : 's'} captured`;
@@ -390,18 +373,7 @@ async function showReviewGrid(binId, frames) {
         render();
       });
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'frame-label-input';
-      input.placeholder = 'Label (optional)';
-      input.value = frame.label || '';
-      input.disabled = frame.deleted;
-      input.addEventListener('input', () => {
-        frame.label = input.value;
-      });
-
       cell.appendChild(btn);
-      cell.appendChild(input);
       grid.appendChild(cell);
     });
 
@@ -419,7 +391,6 @@ async function showReviewGrid(binId, frames) {
         itemData.push({
           imageBlob: frame.blob,
           thumbnailBlob,
-          label: frame.label || '',
         });
       }
 
@@ -427,10 +398,8 @@ async function showReviewGrid(binId, frames) {
       playSaveSuccess();
       vibrateSuccess([100, 50, 100]);
 
-      // Pull AI names and any printed text off the new photos in the
-      // background so they become searchable.
+      // Describe the new photos in the background so they become searchable.
       processPendingItemAi().catch(() => {});
-      processPendingItemOcr().catch(() => {});
 
       overlay.remove();
       runCleanup();

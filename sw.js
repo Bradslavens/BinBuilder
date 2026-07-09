@@ -1,4 +1,4 @@
-const CACHE_NAME = 'binbuilder-v15';
+const CACHE_NAME = 'binbuilder-v17';
 const PRECACHE = [
   './',
   'index.html',
@@ -14,8 +14,6 @@ const PRECACHE = [
   'js/audio.js',
   'js/camera.js',
   'js/qr-scan.js',
-  'js/ocr.js',
-  'js/item-ocr.js',
   'js/item-ai.js',
   'js/ai-settings.js',
   'js/thumbnails.js',
@@ -32,13 +30,14 @@ const PRECACHE = [
   'vendor/idb/index.js',
   'vendor/jsqr/jsQR.js',
   'vendor/jszip/jszip.min.js',
-  'vendor/tesseract/tesseract.esm.min.js',
-  'vendor/tesseract/worker.min.js',
 ];
 
 self.addEventListener('install', (event) => {
+  // Don't skipWaiting here — a newly-installed worker sits in "waiting" so
+  // the page can offer the update banner instead of silently swapping the
+  // app out from under whatever the user is mid-way through.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)),
   );
 });
 
@@ -50,26 +49,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  if (url.origin !== self.location.origin) {
-    if (url.hostname.includes('tesseract') || url.hostname.includes('unpkg') || url.hostname.includes('jsdelivr')) {
-      event.respondWith(
-        caches.open(CACHE_NAME).then(async (cache) => {
-          const cached = await cache.match(request);
-          if (cached) return cached;
-          const response = await fetch(request);
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        }),
-      );
-    }
-    return;
-  }
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     caches.match(request).then((cached) => {

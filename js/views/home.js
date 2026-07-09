@@ -19,7 +19,7 @@ export function renderHome(container, { onLogBin, onOpenSettings }) {
           <span style="font-size:1.4rem">✨</span>
           <span style="flex:1">
             <span style="font-weight:700;display:block">Maximize your experience</span>
-            <span class="muted" style="font-size:0.85rem">Add AI item naming under <strong>More</strong> — search finds items by what's in the photo.</span>
+            <span class="muted" style="font-size:0.85rem">Add AI item descriptions under <strong>More</strong> — search finds items by what's in the photo.</span>
           </span>
           <span id="ai-banner-dismiss" aria-label="Dismiss" style="padding:8px;font-size:1.1rem">✕</span>
         </button>
