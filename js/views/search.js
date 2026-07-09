@@ -27,6 +27,9 @@ export async function renderSearch(container, { onOpenBin }) {
       const cell = document.createElement('div');
       cell.style.display = 'flex';
       cell.style.flexDirection = 'column';
+      // Without this the grid track grows to fit the caption's full (nowrap)
+      // width — a 250-char AI description would blow the columns off-screen.
+      cell.style.minWidth = '0';
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -112,9 +115,9 @@ export async function renderSearch(container, { onOpenBin }) {
       const thumb = item.thumbnailBlob ? blobToObjectUrl(item.thumbnailBlob) : null;
       btn.innerHTML = `
         ${thumb ? `<img src="${thumb}" alt="">` : '<div style="width:56px;height:56px;background:var(--surface2);border-radius:8px"></div>'}
-        <div>
+        <div style="min-width:0">
           <div style="font-weight:700">${escapeHtml(bin?.displayName || item.binId)}</div>
-          <div class="muted" style="font-size:0.85rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(item.aiLabel || '')}</div>
+          <div class="muted" style="font-size:0.85rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere">${escapeHtml(item.aiLabel || '')}</div>
         </div>
       `;
       btn.addEventListener('click', () => onOpenBin(item.binId));
