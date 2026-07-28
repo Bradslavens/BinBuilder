@@ -1,4 +1,4 @@
-const CACHE_NAME = 'binbuilder-v18';
+const CACHE_NAME = 'binbuilder-v19';
 const PRECACHE = [
   './',
   'index.html',
@@ -16,6 +16,7 @@ const PRECACHE = [
   'js/qr-scan.js',
   'js/item-ai.js',
   'js/ai-settings.js',
+  'js/items.js',
   'js/thumbnails.js',
   'js/signature.js',
   'js/live-capture.js',
@@ -25,6 +26,7 @@ const PRECACHE = [
   'js/views/log-bin.js',
   'js/views/bin-list.js',
   'js/views/bin-detail.js',
+  'js/views/item-modal.js',
   'js/views/search.js',
   'js/views/settings.js',
   'vendor/idb/index.js',

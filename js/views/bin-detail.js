@@ -1,7 +1,7 @@
-import {
-  getBin, getItemsForBin, deleteItem, deleteBin, updateBin,
-} from '../db.js';
+import { getBin, getItemsForBin, deleteBin, updateBin } from '../db.js';
 import { blobToObjectUrl, confirmDialog, escapeHtml } from '../utils.js';
+import { itemDescription } from '../items.js';
+import { openItemModal } from './item-modal.js';
 import { showToast } from '../app.js';
 
 export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
@@ -17,7 +17,6 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
     return;
   }
 
-  const items = await getItemsForBin(binId);
   const photoUrl = bin.binPhotoBlob ? blobToObjectUrl(bin.binPhotoBlob) : null;
 
   container.innerHTML = `
@@ -42,7 +41,7 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
         <button type="button" class="btn btn-secondary" id="btn-cancel-edit">Cancel</button>
       </div>
       <button type="button" class="btn btn-primary" id="btn-log-more">Add more items</button>
-      <p class="muted" style="margin:0" id="item-count">${items.length} item${items.length === 1 ? '' : 's'}</p>
+      <p class="muted" style="margin:0" id="item-count"></p>
       <div class="photo-grid" id="item-grid"></div>
       <button type="button" class="btn btn-danger" id="btn-delete-bin">Delete bin</button>
     </div>
@@ -50,10 +49,19 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
   `;
 
   const grid = container.querySelector('#item-grid');
+  const countEl = container.querySelector('#item-count');
+  const modal = container.querySelector('#item-modal');
 
-  if (!items.length) {
-    grid.innerHTML = '<p class="muted">No items yet.</p>';
-  } else {
+  async function refreshGrid() {
+    const items = await getItemsForBin(binId);
+    countEl.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+
+    grid.innerHTML = '';
+    if (!items.length) {
+      grid.innerHTML = '<p class="muted">No items yet.</p>';
+      return;
+    }
+
     for (const item of items) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -61,12 +69,14 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
       if (item.thumbnailBlob) {
         btn.innerHTML = `<img src="${blobToObjectUrl(item.thumbnailBlob)}" alt="">`;
       } else {
-        btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.aiLabel || 'Item')}</div>`;
+        btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(itemDescription(item) || 'Item')}</div>`;
       }
-      btn.addEventListener('click', () => openItemModal(container, item, binId, () => refreshGrid(grid, binId)));
+      btn.addEventListener('click', () => openItemModal(modal, item, { onChange: refreshGrid }));
       grid.appendChild(btn);
     }
   }
+
+  await refreshGrid();
 
   container.querySelector('#btn-log-more').addEventListener('click', onLogMore);
 
@@ -100,75 +110,5 @@ export async function renderBinDetail(container, binId, { onBack, onLogMore }) {
     await deleteBin(binId);
     showToast('Bin deleted');
     onBack();
-  });
-}
-
-async function refreshGrid(grid, binId) {
-  const items = await getItemsForBin(binId);
-  const countEl = document.getElementById('item-count');
-  if (countEl) {
-    countEl.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
-  }
-  grid.innerHTML = '';
-  if (!items.length) {
-    grid.innerHTML = '<p class="muted">No items yet.</p>';
-    return;
-  }
-  for (const item of items) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'photo-grid-item';
-    if (item.thumbnailBlob) {
-      btn.innerHTML = `<img src="${blobToObjectUrl(item.thumbnailBlob)}" alt="">`;
-    } else {
-      btn.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:0.75rem;text-align:center">${escapeHtml(item.aiLabel || 'Item')}</div>`;
-    }
-    btn.addEventListener('click', () => {
-      const modal = document.getElementById('item-modal');
-      if (modal) openItemModal(modal.parentElement, item, binId, () => refreshGrid(grid, binId));
-    });
-    grid.appendChild(btn);
-  }
-}
-
-function openItemModal(container, item, binId, onChange) {
-  const modal = container.querySelector('#item-modal');
-  const imgUrl = item.imageBlob ? blobToObjectUrl(item.imageBlob) : null;
-
-  const addedOn = item.createdAt
-    ? new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-    : '';
-
-  // aiLabel is the AI-generated description. `undefined` means it hasn't been
-  // processed yet (or AI is off); '' means it ran but found nothing to say.
-  let description;
-  if (item.aiLabel) {
-    description = `<p style="margin:12px 0 0;line-height:1.5">${escapeHtml(item.aiLabel)}</p>`;
-  } else if (item.aiLabel === undefined) {
-    description = '<p class="muted" style="margin:12px 0 0">Description pending — turn on AI in More to describe items.</p>';
-  } else {
-    description = '<p class="muted" style="margin:12px 0 0">No description.</p>';
-  }
-
-  modal.classList.remove('hidden');
-  modal.innerHTML = `
-    ${imgUrl ? `<img src="${imgUrl}" alt="">` : '<p class="muted">No photo</p>'}
-    ${description}
-    ${addedOn ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">Added ${escapeHtml(addedOn)}</p>` : ''}
-    <div class="modal-actions">
-      <button type="button" class="btn btn-danger" id="btn-delete-item">Delete item</button>
-      <button type="button" class="btn btn-secondary" id="btn-close-modal">Close</button>
-    </div>
-  `;
-
-  const close = () => modal.classList.add('hidden');
-
-  modal.querySelector('#btn-close-modal').addEventListener('click', close);
-  modal.querySelector('#btn-delete-item').addEventListener('click', async () => {
-    if (!confirmDialog('Delete this item?')) return;
-    await deleteItem(item.id);
-    showToast('Item deleted');
-    close();
-    onChange();
   });
 }

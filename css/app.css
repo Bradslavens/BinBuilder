@@ -455,6 +455,15 @@ body {
   margin-top: 16px;
 }
 
+/* Description editing puts buttons and a text field directly in the modal
+   rather than inside .modal-actions. As direct flex children they get no gap
+   from the container and would be squeezed once the photo plus text overflow. */
+.modal > .btn,
+.modal > .label-field {
+  flex: 0 0 auto;
+  margin-top: 8px;
+}
+
 .search-input {
   width: 100%;
   min-height: var(--tap-min);

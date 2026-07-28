@@ -7,6 +7,7 @@ import {
   getAiKey, setAiKey, removeAiKey, getAiModel, setAiModel, DEFAULT_AI_MODEL,
 } from '../ai-settings.js';
 import { testAiKey, processPendingItemAi, getLastAiError } from '../item-ai.js';
+import { hasUserDescription } from '../items.js';
 
 export function renderSettings(container) {
   const savedKey = getAiKey();
@@ -104,7 +105,10 @@ export function renderSettings(container) {
     }
     const items = await getAllItems();
     const withPhotos = items.filter((i) => i.imageBlob);
-    const named = withPhotos.filter((i) => i.aiLabel !== undefined);
+    // A user-written description counts as described — those items are
+    // deliberately skipped by the AI pass, so they'd otherwise sit in this
+    // count forever looking like a stuck queue.
+    const named = withPhotos.filter((i) => i.aiLabel !== undefined || hasUserDescription(i));
     const err = getLastAiError();
     statusEl.textContent = `${named.length} of ${withPhotos.length} photo items described.`
       + (err ? ` Last error: ${err}` : '');
