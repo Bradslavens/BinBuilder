@@ -29,3 +29,6 @@ blob-report/
 
 # Optional local overrides
 *.local
+
+# Claude Code — per-machine settings; shared settings.json can be committed
+.claude/settings.local.json
