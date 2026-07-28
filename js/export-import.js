@@ -1,4 +1,39 @@
 import { getAllBins, getAllItems, importData } from './db.js';
+import { hasUserDescription } from './items.js';
+
+// The one place that says which item fields belong in a backup. ZIP export,
+// ZIP import and JSON import all go through these, because when they each kept
+// their own field list they drifted and quietly dropped aiLabel — describing a
+// bin cost real API credits and a backup/restore threw the result away.
+//
+// aiLabel is tri-state (see items.js): absent means "never described", so it is
+// only written when the item actually has one. Writing null or '' instead would
+// tell the next AI pass the item was already handled.
+export function itemMetaForExport(item) {
+  const meta = {
+    id: item.id,
+    binId: item.binId,
+    label: item.label,
+    createdAt: item.createdAt,
+    isTextOnly: !!item.isTextOnly,
+  };
+  if (typeof item.aiLabel === 'string') meta.aiLabel = item.aiLabel;
+  if (hasUserDescription(item)) meta.userLabel = item.userLabel;
+  return meta;
+}
+
+export function itemMetaFromImport(entry) {
+  const meta = {
+    id: entry.id,
+    binId: entry.binId,
+    label: entry.label || '',
+    createdAt: entry.createdAt,
+    isTextOnly: !!entry.isTextOnly,
+  };
+  if (typeof entry.aiLabel === 'string') meta.aiLabel = entry.aiLabel;
+  if (hasUserDescription(entry)) meta.userLabel = entry.userLabel;
+  return meta;
+}
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -21,8 +56,10 @@ export async function exportBackup() {
   const items = await getAllItems();
 
   const zip = new window.JSZip();
+  // v2 adds aiLabel/userLabel; v1 backups still import, they just have no
+  // descriptions to restore.
   const manifest = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     bins: [],
     items: [],
@@ -49,11 +86,7 @@ export async function exportBackup() {
 
   for (const item of items) {
     const entry = {
-      id: item.id,
-      binId: item.binId,
-      label: item.label,
-      createdAt: item.createdAt,
-      isTextOnly: !!item.isTextOnly,
+      ...itemMetaForExport(item),
       imageFile: null,
       thumbnailFile: null,
     };
@@ -84,7 +117,7 @@ export async function exportJsonOnly() {
   const items = await getAllItems();
 
   const payload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     bins: await Promise.all(bins.map(async (b) => ({
       ...b,
@@ -156,11 +189,7 @@ async function importZip(file, mode) {
 
   for (const it of manifest.items) {
     const item = {
-      id: it.id,
-      binId: it.binId,
-      label: it.label || '',
-      createdAt: it.createdAt,
-      isTextOnly: !!it.isTextOnly,
+      ...itemMetaFromImport(it),
       imageBlob: null,
       thumbnailBlob: null,
     };
@@ -198,11 +227,7 @@ async function importJson(file, mode) {
   }));
 
   const items = (payload.items || []).map((it) => ({
-    id: it.id,
-    binId: it.binId,
-    label: it.label || '',
-    createdAt: it.createdAt,
-    isTextOnly: !!it.isTextOnly,
+    ...itemMetaFromImport(it),
     imageBlob: it.imageBlob ? base64ToBlob(it.imageBlob) : null,
     thumbnailBlob: it.thumbnailBlob ? base64ToBlob(it.thumbnailBlob) : null,
   }));
