@@ -2,6 +2,7 @@ import { getAllItems, getItem, putItem } from './db.js';
 import { resizeImageBlob } from './thumbnails.js';
 import { blobToDataUrl } from './utils.js';
 import { getAiKey, getAiModel } from './ai-settings.js';
+import { needsAiDescription } from './items.js';
 
 // Background pass that asks an AI model (via the user's own OpenRouter key)
 // to describe each item photo into a searchable `aiLabel` field.
@@ -10,6 +11,15 @@ import { getAiKey, getAiModel } from './ai-settings.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_DESCRIPTION_CHARS = 250;
+
+// Photos are downscaled before upload, but not far. This was 512px, which
+// turned out to be the main reason items got described wrongly: a brand name or
+// small print on a box is unreadable at that size, so the model guesses. Vision
+// models accept up to ~2576px on the long edge; 1024 is the point where text on
+// a typical arm's-length item photo becomes legible without paying for pixels
+// nobody reads. Roughly triples image tokens (still a fraction of a cent per
+// photo on the default model) and is a far cheaper fix than a pricier model.
+export const AI_IMAGE_MAX_WIDTH = 1024;
 const PROMPT =
   'Describe the main item in this photo for a search index, in at most ' +
   '250 characters. Mention the object, its colors, size, any visible text ' +
@@ -67,9 +77,7 @@ async function callOpenRouter(key, body) {
 }
 
 export async function requestItemLabel(imageBlob, key = getAiKey(), model = getAiModel()) {
-  // Downscale before upload: smaller, cheaper, faster, and plenty for
-  // recognizing an object and reading any large text on it.
-  const small = await resizeImageBlob(imageBlob, 512, 0.8);
+  const small = await resizeImageBlob(imageBlob, AI_IMAGE_MAX_WIDTH, 0.85);
   const dataUrl = await blobToDataUrl(small);
 
   const data = await callOpenRouter(key, {
@@ -109,9 +117,9 @@ export async function processPendingItemAi() {
 
   try {
     const items = await getAllItems();
-    const pending = items.filter(
-      (item) => item.imageBlob && item.aiLabel === undefined
-    );
+    // Skips items the user has already described themselves, so we never spend
+    // a request producing a label that is overridden and never displayed.
+    const pending = items.filter(needsAiDescription);
 
     for (const item of pending) {
       let label;
