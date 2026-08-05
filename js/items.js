@@ -29,11 +29,18 @@ export function itemDescription(item) {
   return item?.aiLabel || '';
 }
 
+// AI-suggested search terms, one per thing visible in the photo. The user can
+// delete wrong ones (a hand, background fabric) or add their own, so the array
+// is edited in place — there is no ai/user split like descriptions have.
+export function itemKeywords(item) {
+  return Array.isArray(item?.aiKeywords) ? item.aiKeywords : [];
+}
+
 // Search matches against both descriptions, not just the displayed one:
 // correcting "a blue mug" to "Dad's mug" shouldn't make the item unfindable by
-// what it looks like.
+// what it looks like. Keywords widen the net further ("kitchen", "Nikon").
 export function itemSearchText(item) {
-  return [item?.userLabel, item?.aiLabel]
+  return [item?.userLabel, item?.aiLabel, ...itemKeywords(item)]
     .filter((text) => typeof text === 'string' && text)
     .join(' ')
     .toLowerCase();

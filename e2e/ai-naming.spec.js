@@ -8,7 +8,18 @@ test.beforeEach(async ({ page }) => {
   await setupPage(page);
   page.on('dialog', (dialog) => dialog.accept());
   await page.route('https://openrouter.ai/**', (route) =>
-    route.fulfill({ json: { choices: [{ message: { content: 'Black TV remote with grey buttons' } }] } }),
+    route.fulfill({
+      json: {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              description: 'Black TV remote with grey buttons',
+              keywords: ['remote', 'electronics', 'hand'],
+            }),
+          },
+        }],
+      },
+    }),
   );
   await page.goto('/');
   await page.evaluate(async () => {
@@ -68,4 +79,19 @@ test('key in More → item auto-described → searchable as "remote"', async ({ 
   await page.getByRole('button', { name: 'Search' }).click();
   await page.locator('#search-input').fill('remote');
   await expect(page.getByText('Black TV remote with grey buttons')).toBeVisible({ timeout: 15_000 });
+
+  // Keywords match search too, and show as deletable chips on the item: the AI
+  // tags everything visible (here, the hand holding the remote), and one tap
+  // on the × removes a wrong tag and stops it matching searches.
+  await page.locator('#search-input').fill('electronics');
+  await expect(page.getByText('Black TV remote with grey buttons')).toBeVisible();
+
+  await page.getByText('Black TV remote with grey buttons').click();
+  await expect(page.locator('#item-modal')).toContainText('hand');
+  await page.getByRole('button', { name: 'Remove keyword hand' }).click();
+  await expect(page.locator('#item-modal')).not.toContainText('hand');
+
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('#search-input').fill('hand');
+  await expect(page.getByText('No results.')).toBeVisible();
 });

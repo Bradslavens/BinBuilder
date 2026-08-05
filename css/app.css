@@ -191,6 +191,54 @@ body {
   color: var(--text-muted);
 }
 
+/* AI keyword bubbles on an item. The × targets stay comfortably tappable
+   without inflating the chips to button height. */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 6px 10px 6px 14px;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.chip-x {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  margin: -4px -2px;
+  cursor: pointer;
+}
+
+.chip-x:active {
+  color: var(--danger);
+}
+
+.chip-add {
+  background: none;
+  border-style: dashed;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
 .empty-state {
   text-align: center;
   padding: 48px 16px;

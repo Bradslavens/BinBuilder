@@ -34,6 +34,13 @@ describe('itemMetaForExport', () => {
     expect(meta).not.toHaveProperty('imageBlob');
     expect(meta).not.toHaveProperty('thumbnailBlob');
   });
+
+  it('carries AI keywords, omitting an empty list', () => {
+    expect(itemMetaForExport({ ...baseItem, aiKeywords: ['mug', 'blue'] }).aiKeywords)
+      .toEqual(['mug', 'blue']);
+    expect(itemMetaForExport({ ...baseItem, aiKeywords: [] })).not.toHaveProperty('aiKeywords');
+    expect(itemMetaForExport(baseItem)).not.toHaveProperty('aiKeywords');
+  });
 });
 
 describe('itemMetaFromImport', () => {
@@ -55,6 +62,12 @@ describe('itemMetaFromImport', () => {
 
   it('defaults a missing label to an empty string', () => {
     expect(itemMetaFromImport({ id: 'x', binId: 'b', createdAt: 'now' }).label).toBe('');
+  });
+
+  it('restores AI keywords and filters out junk entries', () => {
+    expect(itemMetaFromImport({ ...baseItem, aiKeywords: ['mug', 7, '', 'blue'] }).aiKeywords)
+      .toEqual(['mug', 'blue']);
+    expect(itemMetaFromImport(baseItem)).not.toHaveProperty('aiKeywords');
   });
 });
 

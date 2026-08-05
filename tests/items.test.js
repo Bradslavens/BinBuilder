@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   itemDescription, hasUserDescription, cleanUserDescription, needsAiDescription,
-  itemSearchText,
+  itemSearchText, itemKeywords,
 } from '../js/items.js';
 
 describe('itemDescription', () => {
@@ -69,6 +69,24 @@ describe('itemSearchText', () => {
   it('returns empty string for an item with no descriptions', () => {
     expect(itemSearchText({})).toBe('');
     expect(itemSearchText(undefined)).toBe('');
+  });
+
+  it('matches on AI keywords, not just descriptions', () => {
+    const text = itemSearchText({ aiLabel: 'a camera', aiKeywords: ['Nikon', 'tripod'] });
+    expect(text).toContain('nikon');
+    expect(text).toContain('tripod');
+  });
+});
+
+describe('itemKeywords', () => {
+  it('returns the stored keywords', () => {
+    expect(itemKeywords({ aiKeywords: ['mug', 'blue'] })).toEqual(['mug', 'blue']);
+  });
+
+  it('returns an empty array when keywords are missing or malformed', () => {
+    expect(itemKeywords({})).toEqual([]);
+    expect(itemKeywords(undefined)).toEqual([]);
+    expect(itemKeywords({ aiKeywords: 'mug' })).toEqual([]);
   });
 });
 

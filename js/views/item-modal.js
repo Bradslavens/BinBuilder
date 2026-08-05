@@ -1,8 +1,10 @@
 import { getItem, putItem, deleteItem } from '../db.js';
-import { blobToObjectUrl, confirmDialog, escapeHtml } from '../utils.js';
+import { blobToObjectUrl, confirmDialog, promptDialog, escapeHtml } from '../utils.js';
 import {
   itemDescription, hasUserDescription, cleanUserDescription, MAX_USER_DESCRIPTION_CHARS,
+  itemKeywords,
 } from '../items.js';
+import { cleanKeywords, MAX_KEYWORDS } from '../item-ai.js';
 import { showToast } from '../app.js';
 
 // Shared by the bin detail grid and the search view so a description can be
@@ -33,6 +35,46 @@ export function openItemModal(modal, item, { onChange, onOpenBin } = {}) {
       return '<p class="muted" style="margin:12px 0 0">No description yet — add one below, or turn on AI in More to describe items automatically.</p>';
     }
     return '<p class="muted" style="margin:12px 0 0">No description.</p>';
+  }
+
+  // Keywords render as chips with a × each: the AI tags everything visible in
+  // the photo, so wrong-but-honest tags (a hand, background fabric) are removed
+  // with one tap instead of an edit session. Adding is capped at MAX_KEYWORDS
+  // to keep search text and the chip row bounded.
+  function keywordsHtml() {
+    if (editing) return '';
+    const kws = itemKeywords(current);
+    const addBtn = kws.length < MAX_KEYWORDS
+      ? '<button type="button" class="chip chip-add" id="btn-add-keyword">+ keyword</button>'
+      : '';
+    if (!kws.length && current.aiLabel === undefined) return '';
+    return `
+      <div class="chip-row">
+        ${kws.map((kw, i) => `
+          <span class="chip">${escapeHtml(kw)}
+            <button type="button" class="chip-x" data-kw="${i}" aria-label="Remove keyword ${escapeHtml(kw)}">×</button>
+          </span>`).join('')}
+        ${addBtn}
+      </div>
+    `;
+  }
+
+  async function mutateKeywords(update) {
+    // Same re-read rule as saveDescription: don't clobber concurrent writes.
+    const fresh = await getItem(current.id);
+    if (!fresh) {
+      showToast('That item no longer exists');
+      close();
+      changed();
+      return;
+    }
+    const next = cleanKeywords(update(itemKeywords(fresh)));
+    if (next.length) fresh.aiKeywords = next;
+    else delete fresh.aiKeywords;
+    await putItem(fresh);
+    current = fresh;
+    render();
+    changed();
   }
 
   function editorHtml() {
@@ -104,12 +146,25 @@ export function openItemModal(modal, item, { onChange, onOpenBin } = {}) {
     modal.innerHTML = `
       ${imgUrl ? `<img src="${imgUrl}" alt="">` : '<p class="muted">No photo</p>'}
       ${descriptionHtml()}
+      ${keywordsHtml()}
       ${addedOn ? `<p class="muted" style="margin:8px 0 0;font-size:0.85rem">Added ${escapeHtml(addedOn)}</p>` : ''}
       ${editorHtml()}
       ${actionsHtml()}
     `;
 
     modal.querySelector('#btn-close-modal')?.addEventListener('click', close);
+
+    modal.querySelectorAll('.chip-x').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.kw);
+        mutateKeywords((kws) => kws.filter((_, idx) => idx !== i));
+      });
+    });
+
+    modal.querySelector('#btn-add-keyword')?.addEventListener('click', () => {
+      const kw = promptDialog('Add a search keyword').trim();
+      if (kw) mutateKeywords((kws) => [...kws, kw]);
+    });
 
     modal.querySelector('#btn-edit-description')?.addEventListener('click', () => {
       editing = true;

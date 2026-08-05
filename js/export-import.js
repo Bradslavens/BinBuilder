@@ -19,6 +19,9 @@ export function itemMetaForExport(item) {
   };
   if (typeof item.aiLabel === 'string') meta.aiLabel = item.aiLabel;
   if (hasUserDescription(item)) meta.userLabel = item.userLabel;
+  if (Array.isArray(item.aiKeywords) && item.aiKeywords.length) {
+    meta.aiKeywords = item.aiKeywords;
+  }
   return meta;
 }
 
@@ -32,6 +35,9 @@ export function itemMetaFromImport(entry) {
   };
   if (typeof entry.aiLabel === 'string') meta.aiLabel = entry.aiLabel;
   if (hasUserDescription(entry)) meta.userLabel = entry.userLabel;
+  if (Array.isArray(entry.aiKeywords) && entry.aiKeywords.length) {
+    meta.aiKeywords = entry.aiKeywords.filter((kw) => typeof kw === 'string' && kw);
+  }
   return meta;
 }
 
@@ -56,10 +62,10 @@ export async function exportBackup() {
   const items = await getAllItems();
 
   const zip = new window.JSZip();
-  // v2 adds aiLabel/userLabel; v1 backups still import, they just have no
-  // descriptions to restore.
+  // v2 added aiLabel/userLabel; v3 adds aiKeywords. Older backups still
+  // import, they just have less to restore.
   const manifest = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     bins: [],
     items: [],
@@ -117,7 +123,7 @@ export async function exportJsonOnly() {
   const items = await getAllItems();
 
   const payload = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     bins: await Promise.all(bins.map(async (b) => ({
       ...b,

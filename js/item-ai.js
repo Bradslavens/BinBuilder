@@ -20,11 +20,18 @@ const MAX_DESCRIPTION_CHARS = 250;
 // nobody reads. Roughly triples image tokens (still a fraction of a cent per
 // photo on the default model) and is a far cheaper fix than a pricier model.
 export const AI_IMAGE_MAX_WIDTH = 1024;
+export const MAX_KEYWORDS = 8;
+const MAX_KEYWORD_CHARS = 40;
 const PROMPT =
-  'Describe the main item in this photo for a search index, in at most ' +
-  '250 characters. Mention the object, its colors, size, any visible text ' +
-  'or brand names, pictures or logos, and any other detail that would help ' +
-  'someone find it later. Reply with only the description, no preamble.';
+  'Describe the main item in this photo for a search index. Reply with only ' +
+  'this JSON, no code fences or preamble: ' +
+  '{"description":"...","keywords":["...",...]}. ' +
+  'description: at most 250 characters — the object, its colors, size, any ' +
+  'visible text or brand names, pictures or logos, and any other detail that ' +
+  'would help someone find it later. If the item is unclear, say so rather ' +
+  'than guess. keywords: 3-8 short search terms, one per distinct thing ' +
+  'visible — include incidental ones like a hand holding the item or ' +
+  'background fabric, so they can be reviewed and removed.';
 
 let running = false;
 let lastError = '';
@@ -44,13 +51,50 @@ export function cleanAiLabel(text) {
     .trim();
 }
 
-export function labelFromResponse(data) {
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content === 'string') return cleanAiLabel(content);
-  if (Array.isArray(content)) {
-    return cleanAiLabel(content.map((part) => part?.text || '').join(' '));
+// Keywords are chips the user can delete one by one, so junk entries cost a
+// tap each: trim, dedupe case-insensitively, and cap the count.
+export function cleanKeywords(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    const kw = String(typeof raw === 'string' || typeof raw === 'number' ? raw : '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_KEYWORD_CHARS);
+    if (!kw || seen.has(kw.toLowerCase())) continue;
+    seen.add(kw.toLowerCase());
+    out.push(kw);
+    if (out.length >= MAX_KEYWORDS) break;
   }
+  return out;
+}
+
+function contentText(data) {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map((part) => part?.text || '').join(' ');
   return '';
+}
+
+// The model is asked for JSON, but a model that ignores that (or an older
+// mocked/cached response) still yields a usable result: the whole text becomes
+// the description and there are simply no keywords.
+export function resultFromResponse(data) {
+  const text = contentText(data).trim();
+  const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try {
+    const parsed = JSON.parse(unfenced);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return {
+        label: cleanAiLabel(parsed.description),
+        keywords: cleanKeywords(parsed.keywords),
+      };
+    }
+  } catch {
+    /* not JSON — fall through */
+  }
+  return { label: cleanAiLabel(text), keywords: [] };
 }
 
 async function callOpenRouter(key, body) {
@@ -76,13 +120,14 @@ async function callOpenRouter(key, body) {
   return res.json();
 }
 
-export async function requestItemLabel(imageBlob, key = getAiKey(), model = getAiModel()) {
+export async function describeItemPhoto(imageBlob, key = getAiKey(), model = getAiModel()) {
   const small = await resizeImageBlob(imageBlob, AI_IMAGE_MAX_WIDTH, 0.85);
   const dataUrl = await blobToDataUrl(small);
 
   const data = await callOpenRouter(key, {
     model,
-    max_tokens: 120,
+    // Enough for the JSON wrapper, a full 250-char description, and 8 keywords.
+    max_tokens: 250,
     messages: [
       {
         role: 'user',
@@ -93,7 +138,7 @@ export async function requestItemLabel(imageBlob, key = getAiKey(), model = getA
       },
     ],
   });
-  return labelFromResponse(data);
+  return resultFromResponse(data);
 }
 
 // One cheap text-only round trip so the settings page can verify a key.
@@ -104,7 +149,7 @@ export async function testAiKey(key, model) {
       max_tokens: 5,
       messages: [{ role: 'user', content: 'Reply with the single word OK.' }],
     });
-    labelFromResponse(data);
+    resultFromResponse(data);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -122,9 +167,9 @@ export async function processPendingItemAi() {
     const pending = items.filter(needsAiDescription);
 
     for (const item of pending) {
-      let label;
+      let result;
       try {
-        label = await requestItemLabel(item.imageBlob);
+        result = await describeItemPhoto(item.imageBlob);
         lastError = '';
       } catch (e) {
         // Whether it's a bad key, empty credits, or being offline, the next
@@ -138,7 +183,8 @@ export async function processPendingItemAi() {
       // stale copy we captured before the request started.
       const fresh = await getItem(item.id);
       if (!fresh || fresh.aiLabel !== undefined) continue;
-      fresh.aiLabel = label;
+      fresh.aiLabel = result.label;
+      if (result.keywords.length) fresh.aiKeywords = result.keywords;
       await putItem(fresh);
     }
   } finally {

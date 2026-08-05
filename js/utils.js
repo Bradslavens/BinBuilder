@@ -39,6 +39,10 @@ export function confirmDialog(message) {
   return window.confirm(message);
 }
 
+export function promptDialog(message) {
+  return window.prompt(message) || '';
+}
+
 export function supportsCamera() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
