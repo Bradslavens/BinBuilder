@@ -53,7 +53,10 @@ test('describe an item by hand, survive a reload, and find it by search', async 
   await expect(page.locator('#item-modal')).toContainText('Grandma quilt, blue and white');
 
   // Search is normally gated behind having an AI key; a hand-written
-  // description should unlock it on its own.
+  // description should unlock it on its own. (Bottom nav is hidden on bin
+  // detail, so close the modal and go back first.)
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Search' }).click();
   await page.locator('#search-input').fill('quilt');
   await expect(page.getByText('Grandma quilt, blue and white')).toBeVisible();

@@ -94,16 +94,18 @@ test('capture an item, browse it in search (no AI), then delete item + bin', asy
   await expect(page.getByText('1 item')).toBeVisible();
 
   // With no AI key, Search just browses every item photo by date — tapping one
-  // opens its bin. (Bottom nav is hidden on bin detail, so go back first.)
+  // opens the item modal, and "Open bin" jumps to its bin. (Bottom nav is
+  // hidden on bin detail, so go back first.)
   await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page.getByText('browse your items by date')).toBeVisible();
   await page.locator('#all-items-grid .photo-grid-item').first().click();
+  await page.getByRole('button', { name: 'Open bin' }).click();
   await expect(page.getByRole('button', { name: 'Add more items' })).toBeVisible();
 
   // Open the item — with AI off it shows a description-pending note — then delete it.
   await page.locator('#item-grid .photo-grid-item').first().click();
-  await expect(page.getByText('Description pending')).toBeVisible();
+  await expect(page.getByText('No description yet')).toBeVisible();
   await page.getByRole('button', { name: 'Delete item' }).click();
   await expect(page.getByText('No items yet.')).toBeVisible();
 
